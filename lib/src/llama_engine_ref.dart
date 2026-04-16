@@ -24,23 +24,31 @@ class LlamaEngineRef {
 
   Future<void> _lock = Future.value();
 
-  /// Sends [messages] to the engine and returns the full assistant reply.
+  /// Runs [fn] exclusively while holding the engine lock.
   ///
-  /// Concurrent calls are queued: each call waits for the preceding one to
-  /// finish before starting its own generation.
-  Future<String> complete(List<LlamaChatMessage> messages) {
+  /// All callers that share this [LlamaEngineRef] are queued: [fn] will not
+  /// start until the preceding holder finishes. Use this to protect any
+  /// operation that drives the engine (e.g. [ChatSession.create]).
+  Future<T> withLock<T>(Future<T> Function() fn) {
     final prev = _lock;
     final completer = Completer<void>();
     _lock = completer.future;
 
     return prev.then((_) async {
       try {
-        return await _collect(messages);
+        return await fn();
       } finally {
         completer.complete();
       }
     });
   }
+
+  /// Sends [messages] to the engine and returns the full assistant reply.
+  ///
+  /// Concurrent calls are queued: each call waits for the preceding one to
+  /// finish before starting its own generation.
+  Future<String> complete(List<LlamaChatMessage> messages) =>
+      withLock(() => _collect(messages));
 
   Future<String> _collect(List<LlamaChatMessage> messages) async {
     final buf = StringBuffer();

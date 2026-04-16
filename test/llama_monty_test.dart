@@ -1,3 +1,4 @@
+import 'package:dart_monty/dart_monty_bridge.dart' show HostFunctionSchema;
 import 'package:llamadart/llamadart.dart';
 import 'package:test/test.dart';
 
@@ -105,24 +106,68 @@ void main() {
       expect(plugin.namespace, equals('llm'));
     });
 
-    test('exposes exactly one function', () {
-      expect(plugin.functions, hasLength(1));
+    test('exposes three functions', () {
+      expect(plugin.functions, hasLength(3));
     });
 
-    test('function is named "llm_complete"', () {
-      expect(plugin.functions.first.schema.name, equals('llm_complete'));
+    test('function names are correct', () {
+      final names = plugin.functions.map((f) => f.schema.name).toList();
+      expect(names, containsAll(['llm_complete', 'llm_chat', 'llm_chat_reset']));
     });
 
-    test('"prompt" param is required', () {
-      final params = plugin.functions.first.schema.params;
-      final prompt = params.firstWhere((p) => p.name == 'prompt');
-      expect(prompt.isRequired, isTrue);
+    group('llm_complete', () {
+      late HostFunctionSchema schema;
+      setUp(() {
+        schema = plugin.functions
+            .firstWhere((f) => f.schema.name == 'llm_complete')
+            .schema;
+      });
+
+      test('"prompt" is required', () {
+        final p = schema.params.firstWhere((p) => p.name == 'prompt');
+        expect(p.isRequired, isTrue);
+      });
+
+      test('"system_prompt" is optional', () {
+        final p = schema.params.firstWhere((p) => p.name == 'system_prompt');
+        expect(p.isRequired, isFalse);
+      });
     });
 
-    test('"system_prompt" param is optional', () {
-      final params = plugin.functions.first.schema.params;
-      final systemPrompt = params.firstWhere((p) => p.name == 'system_prompt');
-      expect(systemPrompt.isRequired, isFalse);
+    group('llm_chat', () {
+      late HostFunctionSchema schema;
+      setUp(() {
+        schema = plugin.functions
+            .firstWhere((f) => f.schema.name == 'llm_chat')
+            .schema;
+      });
+
+      test('"message" is required', () {
+        final p = schema.params.firstWhere((p) => p.name == 'message');
+        expect(p.isRequired, isTrue);
+      });
+
+      test('"system_prompt" is optional', () {
+        final p = schema.params.firstWhere((p) => p.name == 'system_prompt');
+        expect(p.isRequired, isFalse);
+      });
+    });
+
+    group('llm_chat_reset', () {
+      late HostFunctionSchema schema;
+      setUp(() {
+        schema = plugin.functions
+            .firstWhere((f) => f.schema.name == 'llm_chat_reset')
+            .schema;
+      });
+
+      test('"keep_system_prompt" is optional and defaults to true', () {
+        final p = schema.params.firstWhere(
+          (p) => p.name == 'keep_system_prompt',
+        );
+        expect(p.isRequired, isFalse);
+        expect(p.defaultValue, isTrue);
+      });
     });
 
     test('no stream wrapper by default', () {
@@ -135,6 +180,30 @@ void main() {
       final engine = LlamaEngine(_StubBackend());
       final ref = LlamaEngineRef(engine);
       expect(ref.engine, same(engine));
+    });
+
+    test('withLock serialises concurrent calls', () async {
+      final engine = LlamaEngine(_StubBackend());
+      final ref = LlamaEngineRef(engine);
+      final log = <String>[];
+
+      // Fire two withLock calls without awaiting the first.
+      final f1 = ref.withLock(() async {
+        log.add('start-1');
+        await Future<void>.delayed(Duration.zero);
+        log.add('end-1');
+        return 'a';
+      });
+      final f2 = ref.withLock(() async {
+        log.add('start-2');
+        log.add('end-2');
+        return 'b';
+      });
+
+      final results = await Future.wait([f1, f2]);
+      expect(results, equals(['a', 'b']));
+      // f2 must not start until f1 finishes.
+      expect(log, equals(['start-1', 'end-1', 'start-2', 'end-2']));
     });
   });
 }
