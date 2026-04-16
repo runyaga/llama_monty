@@ -1,15 +1,22 @@
 name: llama_monty
-description: A starting point for Dart libraries or applications.
-version: 1.0.0
-# repository: https://github.com/my_org/my_repo
+description: Local LLM inference callable from the Monty Python sandbox — bridges llamadart and dart_monty_core.
+version: 0.1.0
+repository: https://github.com/runyaga/llama_monty
+publish_to: none
 
 environment:
-  sdk: ^3.11.4
+  sdk: ^3.6.0
 
-# Add regular dependencies here.
 dependencies:
-  # path: ^1.9.0
+  dart_monty:
+    git:
+      url: https://github.com/runyaga/dart_monty.git
+      ref: chore/monty-0.0.12-upgrade
+  ffi: ^2.1.0
+  llamadart: ^0.6.10
+  meta: ^1.9.0
 
 dev_dependencies:
-  lints: ^6.0.0
-  test: ^1.25.6
+  lints: ^5.0.0
+  test: ^1.25.0
+  very_good_analysis: ^10.0.0
