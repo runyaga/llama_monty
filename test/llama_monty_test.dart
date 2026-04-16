@@ -173,6 +173,20 @@ void main() {
     test('no stream wrapper by default', () {
       expect(plugin.hasStreamWrapper, isFalse);
     });
+
+    test('createChildInstance returns a new LlamaMontyPlugin', () {
+      final child = plugin.createChildInstance();
+      expect(child, isA<LlamaMontyPlugin>());
+      expect(child, isNot(same(plugin)));
+    });
+
+    test('child shares the same engine ref', () {
+      final engine = LlamaEngine(_StubBackend());
+      final ref = LlamaEngineRef(engine);
+      final parent = LlamaMontyPlugin(ref);
+      final child = parent.createChildInstance() as LlamaMontyPlugin;
+      expect(child.engineRef, same(ref));
+    });
   });
 
   group('LlamaEngineRef', () {

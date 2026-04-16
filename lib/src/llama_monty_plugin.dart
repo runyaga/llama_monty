@@ -37,8 +37,23 @@ class LlamaMontyPlugin extends MontyPlugin {
   final LlamaEngineRef _engineRef;
   final ChatSession _chatSession;
 
+  /// The engine reference backing this plugin.
+  ///
+  /// Exposed for testing and for consumers that need to share an engine
+  /// across multiple plugin instances.
+  LlamaEngineRef get engineRef => _engineRef;
+
   @override
   String get namespace => 'llm';
+
+  /// Creates a child instance for a spawned sandbox.
+  ///
+  /// The child shares the parent's [LlamaEngineRef] (and therefore the same
+  /// [LlamaEngine] and lock), but gets its own fresh [ChatSession] so history
+  /// is isolated per child.
+  @override
+  LlamaMontyPlugin createChildInstance({ChildSpawnContext? context}) =>
+      LlamaMontyPlugin(_engineRef);
 
   @override
   List<HostFunction> get functions => [
