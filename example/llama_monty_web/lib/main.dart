@@ -629,11 +629,12 @@ class _ChatPageState extends State<ChatPage> {
         // and row counts from training data instead of reading the
         // real output above.
         return '$display\n\n'
-            '[harness] If the above output answers the user\'s question, '
-            'reply in plain prose USING THE EXACT VALUES (numbers, '
-            'filenames, headers) from the output above. Do NOT invent '
-            'or substitute different data. If the output is insufficient, '
-            'write the next fence.';
+            '[harness] Your reply MUST include the exact value(s) the '
+            'user asked about, copied verbatim from the output above. '
+            'Do NOT just say "done", "yes", or "task complete" — those '
+            'are not answers. If the user asked you to print 42, your '
+            'reply is "42" (or a sentence containing "42"). If the '
+            'output is insufficient to answer, write the next fence.';
       },
     );
 

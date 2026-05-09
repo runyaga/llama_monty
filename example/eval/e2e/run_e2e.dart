@@ -330,13 +330,19 @@ Future<TestResult> runOne({
     }
 
     // Success: feed tool result back as a synthetic user message so the
-    // model can react / continue / chain into the next step. Keeps the
-    // assistant message in history for the multi-step case.
+    // model can react / continue / chain into the next step. Phrasing
+    // matters — earlier "Is the task done? reply yes/no" leading
+    // question caused the model to answer "Yes" / "Done" instead of
+    // echoing the actual values, breaking every grounding test.
     session.addMessage(
       LlamaChatMessage.fromText(
         role: LlamaChatRole.user,
-        text: 'tool_output:\n$result\n\nIs the task done? '
-            'If yes, reply without a fence. If not, write the next fence.',
+        text: 'tool_output:\n$result\n\nNow reply to my ORIGINAL '
+            'question above. Your reply must include the exact '
+            'value(s) you saw in the tool output (the numbers, '
+            'filenames, or text). Do NOT just say "done", "yes", or '
+            '"task complete". If you need another step, write the '
+            'next fence instead.',
       ),
     );
   }
