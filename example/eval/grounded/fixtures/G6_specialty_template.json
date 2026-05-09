@@ -1,0 +1,10 @@
+{
+  "name": "G6 — specialty-domain template (replace with YOUR subject matter)",
+  "system_prompt": "TODO: domain-specific instruction. Example: 'Answer using ONLY the regulatory text. Cite the section number for each claim. If the text doesn't address the question, say so.'",
+  "context": "TODO: paste 1–3 paragraphs of authoritative text from your actual subject matter (medical guideline / legal regulation / engineering spec / etc.). Keep it under ~500 words for a 2B context budget.",
+  "question": "TODO: a question whose correct answer requires reasoning across the provided text — not memorization.",
+  "gold_must_contain": ["TODO", "expected", "phrases"],
+  "gold_must_not_contain": ["forbidden", "hallucinations"],
+  "category": "specialty",
+  "scoring_note": "TODO: write a one-line note about what the gold answer looks like and what failure mode this fixture catches in your domain."
+}

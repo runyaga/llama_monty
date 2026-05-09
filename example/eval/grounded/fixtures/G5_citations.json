@@ -1,0 +1,10 @@
+{
+  "name": "G5 — citation accuracy",
+  "system_prompt": "Answer the question using ONLY the numbered passage below. After each claim in your answer, cite which sentence number(s) support it in the form [S1], [S2], etc. Multiple supporting sentences are allowed: [S1, S3]. Do not make claims you cannot cite.",
+  "context": "[S1] FleetMind 4.2 introduced charging-station handoff in September 2025. [S2] The change reduced average robot downtime by 38% across pilot sites. [S3] Pioneer Foods reported a 23% throughput improvement after deploying 4.2. [S4] Lila Tran, CTO, attributed the improvement primarily to fewer charging interruptions. [S5] FleetMind has been deployed in 14 facilities worldwide as of late 2025.",
+  "question": "Why did Pioneer Foods see a throughput improvement, and how much was it?",
+  "gold_must_contain": ["23%", "[S3]", "[S4]"],
+  "gold_must_not_contain": [],
+  "category": "citation",
+  "scoring_note": "Answer must cite S3 (the 23% number) and S4 (the why — fewer charging interruptions, attributed by the CTO). Citing S1, S2, or S5 is fine but not required."
+}

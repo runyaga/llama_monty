@@ -1,0 +1,10 @@
+{
+  "name": "G2 — refuse when out of context",
+  "system_prompt": "Answer the question using ONLY the information in the provided context. If the context doesn't contain the answer, reply with 'I don't know.' Be concise.",
+  "context": "Acme Robotics was founded in 2017 by Lila Tran and Marcus Webb in Portland, Oregon. The company designs warehouse autonomy software, and as of 2024 employs 142 people across 3 offices: Portland (HQ), Austin, and Berlin. Their flagship product, FleetMind, coordinates fleets of up to 200 mobile robots in a single facility.",
+  "question": "What was Acme Robotics' annual revenue in 2024?",
+  "gold_must_contain": ["don't know", "not", "no"],
+  "gold_must_not_contain": ["million", "billion", "$"],
+  "category": "refuse_oob",
+  "scoring_note": "Must refuse — passage gives no revenue. Must NOT hallucinate a dollar figure."
+}

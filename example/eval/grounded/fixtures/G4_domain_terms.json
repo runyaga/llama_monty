@@ -1,0 +1,21 @@
+{
+  "name": "G4 — domain-term preservation",
+  "system_prompt": "Rewrite the technical paragraph below in plain English suitable for a non-engineer reader. CRITICAL: keep every technical term exactly as it appears, in the same form. Do not substitute, expand, or paraphrase technical terms — only the surrounding prose. Reply with ONLY the rewritten paragraph.",
+  "context": "The FleetMind controller uses an LSTM-based motion planner that consumes LIDAR point clouds at 20 Hz, fuses them with wheel-encoder odometry and IMU measurements via an Extended Kalman Filter, and emits velocity commands over a CAN bus to each robot's drive controller. Path replanning kicks in whenever the cost-map cell occupancy probability for the planned trajectory exceeds 0.7.",
+  "question": "Rewrite this paragraph in plain English. Remember to preserve every technical term verbatim.",
+  "gold_must_contain": [
+    "LSTM",
+    "LIDAR point clouds",
+    "20 Hz",
+    "wheel-encoder odometry",
+    "IMU",
+    "Extended Kalman Filter",
+    "CAN bus",
+    "drive controller",
+    "cost-map",
+    "0.7"
+  ],
+  "gold_must_not_contain": [],
+  "category": "term_preservation",
+  "scoring_note": "Each technical term must survive verbatim. The model fails when it 'simplifies' (e.g. swaps 'LSTM' for 'neural network', 'LIDAR' for 'laser scanner', 'CAN bus' for 'wire')."
+}

@@ -1,0 +1,10 @@
+{
+  "name": "G3 — multi-document synthesis",
+  "system_prompt": "Answer using ONLY the three provided documents. Your answer MUST cite information from each of the three documents. If you cannot find an answer that uses all three, say 'I don't know.'",
+  "context": "DOCUMENT 1 (Engineering changelog): The FleetMind 4.2 release on 2025-09-14 added support for charging-station handoff, where a robot mid-route can swap with a fresh battery without returning to base.\n\nDOCUMENT 2 (Customer email from Pioneer Foods): We saw a 23% increase in pick throughput after upgrading to FleetMind 4.2. The charging-station handoff was the single biggest contributor.\n\nDOCUMENT 3 (Internal note from Lila Tran, CTO): Pioneer Foods is now our largest reference customer. Their numbers are the strongest case for the 4.2 architecture decision.",
+  "question": "What feature in FleetMind 4.2 most contributed to Pioneer Foods' throughput improvement, and why does the CTO consider that customer important?",
+  "gold_must_contain": ["charging-station handoff", "23%", "reference customer"],
+  "gold_must_not_contain": [],
+  "category": "multi_doc",
+  "scoring_note": "All three docs must contribute: doc1 names the feature, doc2 gives the 23% number, doc3 frames the customer's importance."
+}

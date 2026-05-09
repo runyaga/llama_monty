@@ -1,0 +1,9 @@
+{
+  "name": "G1 — simple grounded QA",
+  "system_prompt": "Answer the question using ONLY the information in the provided context. If the context doesn't contain the answer, reply with 'I don't know.' Be concise.",
+  "context": "Acme Robotics was founded in 2017 by Lila Tran and Marcus Webb in Portland, Oregon. The company designs warehouse autonomy software, and as of 2024 employs 142 people across 3 offices: Portland (HQ), Austin, and Berlin. Their flagship product, FleetMind, coordinates fleets of up to 200 mobile robots in a single facility.",
+  "question": "How many people did Acme Robotics employ as of 2024?",
+  "gold_must_contain": ["142"],
+  "gold_must_not_contain": ["I don't know"],
+  "category": "grounded_factual"
+}
