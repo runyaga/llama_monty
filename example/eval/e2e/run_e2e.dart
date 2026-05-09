@@ -71,6 +71,11 @@ Every if/for/while/def header ends with `:`. Use simple f-strings.
 
 DO NOT wrap calls in try/except just to print the error — let errors
 surface so the system can correct your code.
+
+When the printed output IS the answer to the user's question, REPLY
+IN PLAIN PROSE WITHOUT A FENCE. The harness only knows you are done
+when you stop writing fences. One fence per question once you have
+the answer.
 ''';
 
 // ---------------------------------------------------------------------------

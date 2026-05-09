@@ -75,6 +75,13 @@ surface so the system can show them to you and you can fix the
 program. If a fence fails, the harness will hand you back the real
 error and ask for a corrected fence; rewrite the program using
 pathlib instead of apologizing.
+
+When the printed output IS the answer to the user's question, REPLY
+IN PLAIN PROSE WITHOUT A FENCE. The harness only knows you are done
+when you stop writing fences. If you ran one fence, got `False`, and
+the question was "are X and Y the same?", reply "No, they differ" —
+do not write another fence to "verify" the same thing again. One
+fence per question once you have the answer.
 ''';
 
 // ---------------------------------------------------------------------------
