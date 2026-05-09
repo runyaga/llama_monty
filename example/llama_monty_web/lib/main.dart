@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dart_monty/dart_monty.dart' show DartMonty;
 import 'package:dart_monty/dart_monty_bridge.dart';
@@ -9,6 +10,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
+import 'package:wasm_host_dart/wasm_host.dart';
+
+import 'bash_host_factory.dart';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -141,6 +145,57 @@ String _writeFile(String path, String content) {
 }
 
 // ---------------------------------------------------------------------------
+// /tmp/llama-test snapshot for the wasm VFS
+// ---------------------------------------------------------------------------
+
+/// Recursively walks `/tmp/llama-test/` via the shared OsCallHandler
+/// and produces the `Map<String, Uint8List>` shape `WasmHostBackend.
+/// loadTree(...)` expects. Skips files larger than 64 KiB (the spike's
+/// stdout cap is 64 KiB and the VFS isn't designed for large blobs).
+Future<Map<String, Uint8List>> _snapshotLlamaTestForWasmVfs(
+  OsCallHandler os,
+) async {
+  const root = '/tmp/llama-test';
+  const maxBytes = 64 * 1024;
+  final out = <String, Uint8List>{};
+
+  Future<void> walk(String path) async {
+    final exists = await os('Path.exists', [path], null);
+    if (exists != true) return;
+    final isFile = await os('Path.is_file', [path], null);
+    if (isFile == true) {
+      final bytes = await os('Path.read_bytes', [path], null);
+      Uint8List? buf;
+      if (bytes is Uint8List) {
+        buf = bytes;
+      } else if (bytes is List<int>) {
+        buf = Uint8List.fromList(bytes);
+      }
+      if (buf != null && buf.length <= maxBytes) {
+        out[path] = buf;
+      }
+      return;
+    }
+    final entries = await os('Path.iterdir', [path], null);
+    if (entries is! List) return;
+    for (final e in entries) {
+      String childPath;
+      if (e is MontyPath) {
+        childPath = e.value;
+      } else if (e is String) {
+        childPath = e;
+      } else {
+        continue;
+      }
+      await walk(childPath);
+    }
+  }
+
+  await walk(root);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Logger
 // ---------------------------------------------------------------------------
 
@@ -258,6 +313,10 @@ class _ChatPageState extends State<ChatPage> {
   MontyRuntime? _agentSession; // used by run_python tool in chat
   MontyRuntime? _replRuntime; // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
+
+  // wasmtime-spike's WASM host for run_bash. Opened on app launch,
+  // disposed on tear-down. Persists cwd + VFS across all calls.
+  WasmHostBackend? _wasmBashHost;
 
   double? _loadProgress;
   String _status = 'idle';
@@ -622,6 +681,38 @@ class _ChatPageState extends State<ChatPage> {
         return raw;
       }),
     );
+
+    // run_bash — wasmtime-spike's allow-listed shell over an in-memory
+    // VFS. Open the backend once and reuse for every call (cwd
+    // persists across run() calls, which is the whole point — agent
+    // can `cd /data` in one fence and `cat foo.txt` in the next).
+    // Bytes for wasm_guest.wasm and the dylib live under
+    // ~/dev/wasmtime-spike/; both must be built (cargo build +
+    // wasm32-wasip1 release) before launching the app on native.
+    // Web backend is bytes-only and works without the dylib.
+    try {
+      final wasmHost = await openBashHostOrNull();
+      if (wasmHost != null) {
+        final wasmBytes = await loadGuestWasmBytes();
+        final snapshot = await _snapshotLlamaTestForWasmVfs(sharedOs);
+        await wasmHost.loadTree(snapshot);
+        agentSession.register(
+          buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
+        );
+        _wasmBashHost = wasmHost;
+        _appendChatLog(
+          'sys',
+          'run_bash registered (${snapshot.length} files in wasm VFS).',
+        );
+      } else {
+        _appendChatLog(
+          'sys',
+          'run_bash NOT registered — wasmtime-spike artifacts missing.',
+        );
+      }
+    } on Object catch (e) {
+      _appendChatLog('sys', 'run_bash registration failed: $e');
+    }
 
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
