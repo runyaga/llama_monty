@@ -1,0 +1,123 @@
+--- /Users/runyaga/.pub-cache/hosted/pub.dev/llamadart-0.6.11/lib/src/backends/webgpu/webgpu_backend.dart	2026-05-08 18:18:59
++++ /Users/runyaga/dev/llamadart/lib/src/backends/webgpu/webgpu_backend.dart	2026-05-08 20:17:59
+@@ -1667,6 +1667,69 @@
+         controller.add(bytes);
+       }
+     }.toJS;
++
++    // WORKAROUND: the WebGPU C++ grammar sampler reliably aborts the WASM
++    // module when constraining tool-call-shaped JSON grammars. Confirmed via
++    // probes: ~9 tokens of constrained generation, then `Aborted(undefined)` /
++    // `___cxa_throw` deep in the sampler, after which the entire WASM heap is
++    // corrupted (subsequent ccalls hit null function / OOB). This happens
++    // whether grammarLazy is true or false — grammar enforcement itself is
++    // broken on web. Until the bridge fix, drop the grammar entirely on web
++    // and let the model free-generate; downstream tool-call parsers handle it.
++    final _grammarLazyDropped = params.grammar != null;
++    // ignore: avoid_print
++    print(
++      '[PROBE webgpu.generate.entry] grammarLazy=${params.grammarLazy} '
++      'grammarLen=${params.grammar?.length ?? 0} '
++      'triggers=${params.grammarTriggers.length} '
++      'preserved=${params.preservedTokens.length} '
++      'lazyDropped=$_grammarLazyDropped',
++    );
++    if (_grammarLazyDropped) {
++      // ignore: avoid_print
++      print(
++        '[PROBE webgpu.lazy-grammar] dropping ${params.grammar!.length}b grammar '
++        '(triggers=${params.grammarTriggers.length}); WebGPU bridge has no lazy support',
++      );
++    }
++    // PROBE: log what we're about to send to the WebGPU bridge.
++    final _gram = _grammarLazyDropped ? null : params.grammar;
++    final _promptHead = prompt.length > 600 ? '${prompt.substring(0, 600)}…' : prompt;
++    final _promptTail = prompt.length > 600
++        ? prompt.substring(prompt.length - 200)
++        : '';
++    _emitConsoleText(
++      LlamaLogLevel.warn,
++      '[PROBE webgpu.createCompletion] '
++      'gram=${_gram == null ? 'null' : '${_gram.length}b'} '
++      'grammarLazy=${params.grammarLazy} '
++      'triggers=${params.grammarTriggers.length} '
++      'preserved=${params.preservedTokens.length} '
++      'nPredict=${params.maxTokens} '
++      'promptLen=${prompt.length}',
++    );
++    if (_gram != null) {
++      _emitConsoleText(
++        LlamaLogLevel.warn,
++        '[PROBE grammar.first800]\n${_gram.length > 800 ? _gram.substring(0, 800) : _gram}',
++      );
++    }
++    if (params.grammarTriggers.isNotEmpty) {
++      _emitConsoleText(
++        LlamaLogLevel.warn,
++        '[PROBE grammarTriggers] ${params.grammarTriggers.map((t) => t.toString()).join(' | ')}',
++      );
++    }
++    if (params.preservedTokens.isNotEmpty) {
++      _emitConsoleText(
++        LlamaLogLevel.warn,
++        '[PROBE preservedTokens] ${params.preservedTokens.join(' | ')}',
++      );
++    }
++    _emitConsoleText(
++      LlamaLogLevel.warn,
++      '[PROBE prompt.head]\n$_promptHead${_promptTail.isEmpty ? '' : '\n…\n[PROBE prompt.tail]\n$_promptTail'}',
++    );
+ 
+     final options = WebGpuCompletionOptions(
+       nPredict: params.maxTokens,
+@@ -1676,7 +1739,7 @@
+       topP: params.topP,
+       penalty: params.penalty,
+       seed: params.seed ?? DateTime.now().millisecondsSinceEpoch,
+-      grammar: params.grammar,
++      grammar: _gram,
+       mediaMaxImagePixels: mediaMaxImagePixels,
+       mediaMaxImageEdge: mediaMaxImageEdge,
+       onToken: onToken as JSFunction,
+@@ -1709,6 +1772,41 @@
+             emittedLength = latestText.length;
+           }
+         } catch (e, st) {
++          // PROBE: capture the raw JS-level error before it gets normalized.
++          try {
++            String runtimeNotes = '';
++            try {
++              final hints = _collectBridgeRuntimeHints(bridge);
++              runtimeNotes = hints['llamadart.webgpu.runtime_notes'] ?? '';
++            } catch (_) {}
++            String? jsName;
++            String? jsMessage;
++            String? jsStack;
++            try {
++              final jsErr = e as JSObject;
++              jsName = jsErr.getProperty('name'.toJS)?.toString();
++              jsMessage = jsErr.getProperty('message'.toJS)?.toString();
++              jsStack = jsErr.getProperty('stack'.toJS)?.toString();
++            } catch (_) {}
++            _emitConsoleText(
++              LlamaLogLevel.error,
++              '[PROBE createCompletion.threw] '
++              'type=${e.runtimeType} '
++              'jsName=${jsName ?? '-'} '
++              'jsMessage=${jsMessage ?? '-'} '
++              'runtimeNotes=$runtimeNotes',
++            );
++            if (jsStack != null) {
++              _emitConsoleText(
++                LlamaLogLevel.error,
++                '[PROBE createCompletion.jsStack]\n$jsStack',
++              );
++            }
++            _emitConsoleText(
++              LlamaLogLevel.error,
++              '[PROBE createCompletion.dartStack]\n$st',
++            );
++          } catch (_) {}
+           if (!stoppedBySequence && !canceledByCaller && !controller.isClosed) {
+             controller.addError(e, st);
+           }
