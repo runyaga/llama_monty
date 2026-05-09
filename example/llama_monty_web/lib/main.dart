@@ -53,11 +53,23 @@ Children inherit every host function (llm_complete, chat_summarize,
 chat_history, etc.) so a child can compress this very chat and
 return one line.
 
-Monty is a Python SUBSET. No class / yield / with / decorators /
-.format() / % string-format / del. Modules: math, re, json,
-datetime, pathlib. Use round(x, 2) and simple f-strings (no
-method calls inside braces). Every if/for/while/def header
-ends with `:`.
+Monty is a Python 3 SUBSET. ALWAYS:
+  print(x)            # print is a FUNCTION, not a statement
+  from pathlib import Path
+  Path(p).read_text()                  # read a file
+  Path(p).write_text("hello")          # write a file
+  for p in Path('/tmp').iterdir(): print(p)
+NEVER:
+  import os           # os module is NOT available — use pathlib
+  print x             # Python 2 syntax — REJECTED
+  with open(p):       # context managers REJECTED
+  class X:            # class keyword REJECTED
+  "{:.2f}".format(x)  # .format is REJECTED — use round(x,2)
+  "%.2f" % x          # % string formatting REJECTED
+Also no yield / decorators / del / match-case.
+Allowed modules: math, re, json, datetime, pathlib.
+Every if/for/while/def header ends with `:`. Use simple f-strings
+(no method calls inside braces).
 ''';
 
 const _systemPrompt = '''
