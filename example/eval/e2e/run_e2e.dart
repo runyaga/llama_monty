@@ -153,6 +153,11 @@ String _pointedNudge({required String code, required String error}) {
 // Test case definition.
 // ---------------------------------------------------------------------------
 
+typedef VerifyFn = Future<({bool ok, String reason})> Function({
+  required MontyRuntime monty,
+  required String finalProse,
+});
+
 class TestCase {
   TestCase({
     required this.id,
@@ -163,7 +168,7 @@ class TestCase {
   });
   final String id;
   final String prompt;
-  final Future<({bool ok, String reason})> Function(MontyRuntime monty) verify;
+  final VerifyFn verify;
   final bool usesSandbox;
   // Some tests assert the model STOPS after a small number of turns
   // (e.g. a one-fence comparison should not spin into 8 fences).
@@ -178,6 +183,7 @@ class TestResult {
     required this.turns,
     required this.retries,
     required this.transcript,
+    required this.finalProse,
   });
   final String id;
   final bool passed;
@@ -185,6 +191,10 @@ class TestResult {
   final int turns;
   final int retries;
   final String transcript;
+  // The model's last NON-fence assistant reply — i.e. the prose answer
+  // after the last successful fence. Used by tests that check whether
+  // the LLM hallucinates (claims values that aren't in the tool output).
+  final String finalProse;
 }
 
 // ---------------------------------------------------------------------------

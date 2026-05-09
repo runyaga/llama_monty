@@ -36,8 +36,10 @@ print(len(data), 'rows; header:', data[0])
 Read the printed output, then write the NEXT small fence using what
 you saw. Don't pack everything into one fence.
 
-Files at /tmp/fixtures/: welcome.md, sample.csv (name,quantity,price),
-notes.txt.
+`/tmp/fixtures/` is pre-seeded but the contents may change between
+sessions. Always discover what's there with
+`for p in Path('/tmp/fixtures').iterdir(): print(p)` before reading
+specific files. Don't assume a fixed list of filenames.
 
 For verbose work, hand it to a child sandbox — only the child's
 final print() bubbles back here:
@@ -82,6 +84,13 @@ when you stop writing fences. If you ran one fence, got `False`, and
 the question was "are X and Y the same?", reply "No, they differ" —
 do not write another fence to "verify" the same thing again. One
 fence per question once you have the answer.
+
+GROUNDING RULE: when you write your final prose answer, copy the
+EXACT numbers, filenames, and headers from the printed tool output.
+NEVER invent data — if the output said `6 rows; header: a,b,c`, do
+not summarise it as `3 rows; header: name,age,city`. Quote the real
+values. If you didn't actually receive the value from a tool call,
+do not report it.
 
 For tasks that genuinely need multiple separate steps (each step
 depends on the previous step's output, or the steps are too big for
@@ -590,7 +599,21 @@ class _ChatPageState extends State<ChatPage> {
         }
         final display = out.isEmpty ? '(no output)' : out;
         _appendChatLog('output', display);
-        return display;
+        // Append a decision directive so the model sees the
+        // stop-or-continue rule right at the moment it picks its
+        // next response. Without this, weak models (Gemma 4 E2B)
+        // tend to default to "write another fence" even when the
+        // output already answers the question. The "USE THE EXACT
+        // VALUES" line is the anti-hallucination guardrail — Gemma
+        // 4 E2B otherwise tends to fabricate plausible CSV headers
+        // and row counts from training data instead of reading the
+        // real output above.
+        return '$display\n\n'
+            '[harness] If the above output answers the user\'s question, '
+            'reply in plain prose USING THE EXACT VALUES (numbers, '
+            'filenames, headers) from the output above. Do NOT invent '
+            'or substitute different data. If the output is insufficient, '
+            'write the next fence.';
       },
     );
 
@@ -716,6 +739,10 @@ else:
       // refer to the EXACT bad code and error when we reset history.
       String? lastFailedCode;
       String? lastFailedError;
+      // Loop-spin detection: if the model submits the SAME code two
+      // turns in a row, it's stuck regenerating instead of responding
+      // to its own tool output. Break the loop with a system note.
+      String? lastSubmittedCode;
 
       while (true) {
         String? finishReason;
@@ -863,6 +890,17 @@ else:
               toolRetries = 0;
               // Show a distinct "tool call" entry so it's easy to spot.
               _appendChatLog('tool', tc.name);
+              final submittedCode = effectiveArgs['code']?.toString() ?? '';
+              if (submittedCode.isNotEmpty &&
+                  submittedCode == lastSubmittedCode) {
+                _appendChatLog(
+                  'sys',
+                  'Loop-spin detected: identical code two turns in a row. '
+                  'Stopping. Type a follow-up to continue.',
+                );
+                break;
+              }
+              lastSubmittedCode = submittedCode;
               try {
                 resultStr =
                     await _runPythonTool!.invoke(effectiveArgs) as String? ??
@@ -935,6 +973,15 @@ else:
           // same run_python tool.
           final fenceCode = _extractPythonFence(text);
           if (fenceCode != null && fenceCode.trim().isNotEmpty) {
+            if (fenceCode == lastSubmittedCode) {
+              _appendChatLog(
+                'sys',
+                'Loop-spin detected: identical fence two turns in a row. '
+                'Stopping. Type a follow-up to continue.',
+              );
+              break;
+            }
+            lastSubmittedCode = fenceCode;
             final prose = _stripPythonFence(text).trim();
             if (prose.isNotEmpty) _appendChatLog('assistant', prose);
             _appendChatLog('tool', 'run_python (from fence)');
