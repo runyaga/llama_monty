@@ -148,11 +148,15 @@ class TestCase {
     required this.prompt,
     required this.verify,
     this.usesSandbox = false,
+    this.maxTurns = 8,
   });
   final String id;
   final String prompt;
   final Future<({bool ok, String reason})> Function(MontyRuntime monty) verify;
   final bool usesSandbox;
+  // Some tests assert the model STOPS after a small number of turns
+  // (e.g. a one-fence comparison should not spin into 8 fences).
+  final int maxTurns;
 }
 
 class TestResult {
@@ -180,9 +184,9 @@ Future<TestResult> runOne({
   required LlamaEngine engine,
   required MontyRuntime monty,
   required TestCase tc,
-  int maxTurns = 8,
   int maxRetries = 4,
 }) async {
+  final maxTurns = tc.maxTurns;
   final session = ChatSession(engine, systemPrompt: _systemPrompt);
   final t = StringBuffer();
   void log(String tag, String s) => t.writeln('[$tag] $s');
@@ -376,6 +380,21 @@ else:
       },
     ),
     TestCase(
+      // Regression test for "False makes the loop spin": model writes
+      // `print(a == b)`, output is `False`, the loop should NOT keep
+      // emitting more fences. Single fence in, single answer out —
+      // the model should reply in plain prose (no fence) once it has
+      // the answer. maxTurns=3 caps the loop so this test surfaces
+      // the runaway behaviour: we then mark FAIL in main() if the
+      // loop hit the cap (turns >= 3).
+      id: 'D_terminal_false_stops_loop',
+      prompt:
+          'Are /tmp/fixtures/welcome.md and /tmp/fixtures/notes.txt '
+          'identical files? Reply with a clear yes or no.',
+      maxTurns: 3,
+      verify: (m) async => (ok: true, reason: 'turn-bound check in main'),
+    ),
+    TestCase(
       id: 'C_sandbox_factorial',
       prompt:
           'Use sandbox_spawn to compute factorial(10) inside a child sandbox '
@@ -401,10 +420,31 @@ else:
       final hit = result.transcript.contains('3628800');
       stdout.writeln('sandbox factorial check: ${hit ? 'PASS' : 'FAIL'}');
     }
+    // For tests that ASSERT the loop should stop quickly: hitting the
+    // turn cap means the model kept emitting fences past the answer.
+    var passed = result.passed;
+    var reason = result.reason;
+    if (tc.id == 'D_terminal_false_stops_loop' &&
+        result.turns >= tc.maxTurns) {
+      passed = false;
+      reason = 'loop hit turn cap (${result.turns}) — model kept fencing '
+          'after a terminal answer';
+    }
     stdout.writeln(
-      'result: ${result.passed ? 'PASS' : 'FAIL'} '
-      '(turns=${result.turns}, retries=${result.retries}) — ${result.reason}',
+      'result: ${passed ? 'PASS' : 'FAIL'} '
+      '(turns=${result.turns}, retries=${result.retries}) — $reason',
     );
+    // Stash the adjusted result for the summary.
+    if (passed != result.passed || reason != result.reason) {
+      results[results.length - 1] = TestResult(
+        id: result.id,
+        passed: passed,
+        reason: reason,
+        turns: result.turns,
+        retries: result.retries,
+        transcript: result.transcript,
+      );
+    }
     await monty.dispose();
   }
 
