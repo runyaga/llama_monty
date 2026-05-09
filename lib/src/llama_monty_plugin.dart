@@ -95,6 +95,33 @@ class LlamaMontyPlugin extends MontyExtension {
   final Map<int, _StreamHandle> _streams = {};
   int _nextStreamId = 1;
 
+  /// Number of currently open stream handles.
+  ///
+  /// Exposed for pressure tests / leak detection. A non-zero value after a
+  /// Python `execute()` returns indicates the LLM-written code did not
+  /// `llm_stream_close()` every handle it opened (e.g. crashed before the
+  /// close, returned early, etc.).
+  int get streamHandleCount => _streams.length;
+
+  /// Snapshot of currently open stream handle ids.
+  List<int> get streamHandleIds => List.unmodifiable(_streams.keys);
+
+  /// Public escape hatch: drop every open stream handle. Intended for
+  /// shutdown / tests / explicit GC after the host app observes a Python
+  /// script ending. Background tasks driving the streams are not cancelled
+  /// here — they will release the engine lock at natural EOS.
+  ///
+  /// **Why this exists as an explicit method**: dart_monty's extension API
+  /// does not yet surface a per-run "this execute() finished" callback.
+  /// `HostContext.executionId` is per-host-function-call, not per-run, so
+  /// the plugin cannot autonomously tell which handles outlived their
+  /// owning Python script. Until dart_monty grows `MontyExtension.onRunEnd`
+  /// (or equivalent), the host application is the closest thing to a run
+  /// observer and must call this when it knows a run has finished.
+  ///
+  /// See `example/stream_pressure_demo.dart` for the failure modes.
+  void disposeAllHandles() => _streams.clear();
+
   late final HostFunction _llmCompleteFunction = HostFunction(
     dispatch: DispatchMode.sync,
     schema: const HostFunctionSchema(
