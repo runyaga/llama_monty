@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dart_monty/dart_monty.dart' show DartMonty;
 import 'package:dart_monty/dart_monty_bridge.dart';
@@ -324,6 +325,12 @@ class _ChatPageState extends State<ChatPage> {
   bool _busy = false;
   int _contextTokens = 0;
   int _selectedExperiment = 0;
+
+  // Files panel state — populated by _refreshFiles, viewed in _filesPanel.
+  List<_FsEntry> _filesEntries = const [];
+  bool _filesBusy = false;
+  String? _filesViewPath;
+  String? _filesViewContent;
 
   @override
   void initState() {
@@ -1384,11 +1391,51 @@ else:
                     ],
                   ),
                 ),
-                // ── REPL panel ─────────────────────────────────────────────
+                // ── REPL / Files tabs ──────────────────────────────────────
                 const VerticalDivider(width: 1, thickness: 1),
                 Expanded(
                   flex: 1,
-                  child: _replPanel(cs),
+                  child: DefaultTabController(
+                    length: 2,
+                    child: Column(
+                      children: [
+                        Container(
+                          color: cs.surfaceContainerHigh,
+                          child: TabBar(
+                            tabs: const [
+                              Tab(
+                                height: 32,
+                                icon: Icon(Icons.terminal, size: 14),
+                                iconMargin: EdgeInsets.zero,
+                              ),
+                              Tab(
+                                height: 32,
+                                icon: Icon(Icons.folder, size: 14),
+                                iconMargin: EdgeInsets.zero,
+                              ),
+                            ],
+                            labelColor: cs.primary,
+                            unselectedLabelColor: cs.onSurfaceVariant,
+                            indicatorColor: cs.primary,
+                            indicatorWeight: 2,
+                            onTap: (i) {
+                              // Refresh files when the user opens that tab.
+                              if (i == 1) unawaited(_refreshFiles());
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: [
+                              _replPanel(cs),
+                              _filesPanel(cs),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1485,6 +1532,245 @@ else:
                   }),
           child: const Text('Clear'),
         ),
+      ],
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Files panel — visualises the in-memory filesystem the LLM operates on.
+  // -------------------------------------------------------------------------
+
+  /// Walks well-known roots (`/fixtures`, `/tmp/llama_monty*`) via Monty
+  /// pathlib and updates [_filesEntries]. Best-effort: silently no-ops if
+  /// the runtime isn't ready yet.
+  Future<void> _refreshFiles() async {
+    final agent = _agentSession;
+    if (agent == null) return;
+    setState(() => _filesBusy = true);
+    const script = '''
+import json
+from pathlib import Path
+
+out = []
+
+def _safe_size(p):
+    try:
+        return len(p.read_text())
+    except Exception:
+        return -1
+
+def walk(root):
+    p = Path(root)
+    if not p.exists():
+        return
+    if p.is_file():
+        out.append({'path': str(p), 'is_file': True, 'size': _safe_size(p)})
+        return
+    out.append({'path': str(p), 'is_file': False, 'size': 0})
+    for entry in sorted(p.iterdir(), key=lambda q: q.name):
+        if entry.is_file():
+            out.append({'path': str(entry), 'is_file': True, 'size': _safe_size(entry)})
+        else:
+            walk(str(entry))
+
+for root in ['/fixtures', '/tmp/llama_monty', '/tmp/llama_monty_files']:
+    walk(root)
+
+print(json.dumps(out))
+''';
+    try {
+      final r = await agent.execute(script).result;
+      final raw = (r.printOutput ?? '').trim();
+      if (raw.isEmpty || r.error != null) {
+        setState(() {
+          _filesEntries = const [];
+          _filesBusy = false;
+        });
+        return;
+      }
+      final list = (jsonDecode(raw) as List).cast<dynamic>();
+      final entries = list.map((m) {
+        final mm = m as Map<String, dynamic>;
+        return _FsEntry(
+          path: mm['path'] as String,
+          isFile: mm['is_file'] as bool,
+          size: (mm['size'] as num).toInt(),
+        );
+      }).toList();
+      setState(() {
+        _filesEntries = entries;
+        _filesBusy = false;
+      });
+    } catch (_) {
+      setState(() => _filesBusy = false);
+    }
+  }
+
+  /// Reads [path] via Monty and stores the result so the panel can render
+  /// it inline. Caller is responsible for the active-tab UX.
+  Future<void> _viewFile(String path) async {
+    final agent = _agentSession;
+    if (agent == null) return;
+    final escaped = jsonEncode(path);
+    final r = await agent
+        .execute('from pathlib import Path\nprint(Path($escaped).read_text())')
+        .result;
+    setState(() {
+      _filesViewPath = path;
+      _filesViewContent = r.error != null
+          ? '(error: ${r.error!.message})'
+          : (r.printOutput ?? '').trimRight();
+    });
+  }
+
+  Widget _filesPanel(ColorScheme cs) {
+    final ready = _agentSession != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          color: cs.surfaceContainerHigh,
+          child: Row(
+            children: [
+              const Icon(Icons.folder, size: 14),
+              const SizedBox(width: 6),
+              const Text(
+                'Files',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '(${_filesEntries.where((e) => e.isFile).length} files)',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+              const Spacer(),
+              if (_filesBusy)
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: ready && !_filesBusy ? _refreshFiles : null,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(40, 24),
+                ),
+                child: const Text('Refresh', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _filesEntries.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      ready
+                          ? 'No files yet. Click Refresh, or ask the LLM to write one.'
+                          : 'Load model to enable.',
+                      style: TextStyle(
+                        color: cs.onSurface.withAlpha(120),
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _filesEntries.length,
+                  itemBuilder: (ctx, i) {
+                    final e = _filesEntries[i];
+                    final selected = e.path == _filesViewPath;
+                    return ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      selected: selected,
+                      leading: Icon(
+                        e.isFile ? Icons.description : Icons.folder,
+                        size: 16,
+                        color: e.isFile ? cs.primary : cs.tertiary,
+                      ),
+                      title: Text(
+                        e.path,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: e.isFile
+                          ? Text(
+                              e.size < 0 ? '(binary or unreadable)' : '${e.size} bytes',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            )
+                          : null,
+                      onTap:
+                          e.isFile && !_filesBusy ? () => _viewFile(e.path) : null,
+                    );
+                  },
+                ),
+        ),
+        if (_filesViewPath != null)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 220),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              border: Border(top: BorderSide(color: cs.outlineVariant)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _filesViewPath!,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 14),
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 24, minHeight: 24),
+                        onPressed: () => setState(() {
+                          _filesViewPath = null;
+                          _filesViewContent = null;
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      _filesViewContent ?? '',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1596,6 +1882,17 @@ else:
       ],
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Files panel data
+// ---------------------------------------------------------------------------
+
+class _FsEntry {
+  const _FsEntry({required this.path, required this.isFile, required this.size});
+  final String path;
+  final bool isFile;
+  final int size;
 }
 
 // ---------------------------------------------------------------------------
