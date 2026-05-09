@@ -22,5 +22,6 @@
 /// ```
 library;
 
+export 'src/chat_shell_plugin.dart';
 export 'src/llama_engine_ref.dart';
 export 'src/llama_monty_plugin.dart';

@@ -29,6 +29,22 @@ Rules:
 - The host runs the fence and feeds you the printed output. Do not invent output you have not received yet.
 - Python state persists across turns — variables defined in one fence are available in the next.
 
+## Built-in host functions
+
+Inside the fence you can call these:
+- `llm_complete(prompt, system_prompt=None) -> str` — stateless LLM call.
+- `llm_chat(message, system_prompt=None) -> str` — multi-turn LLM (separate
+  history from the outer chat).
+- `llm_chat_reset(keep_system_prompt=True)` — wipe llm_chat history.
+- `chat_history() -> str` — markdown of the OUTER conversation (this UI).
+- `chat_history_messages() -> list[dict]` — same, programmatic.
+- `chat_summarize(style='bullets') -> str` — LLM-summarized outer history.
+- `chat_reset(keep_system_prompt=True, seed=None)` — wipe the outer chat.
+  Pass `seed` (e.g. the result of `chat_summarize()`) to plant context.
+
+When the user asks you to "compress" or "reset" the conversation, write
+Python that calls those.
+
 ## Monty Python sandbox — restrictions
 The Python runs inside Monty, a restricted subset:
 - NO class keyword — use dicts
@@ -316,19 +332,24 @@ class _ChatPageState extends State<ChatPage> {
     // recursive llm_complete invocations from inside run_python.
     final engineRef = LlamaEngineRef(engine);
 
-    // Agent runtime — Python sandbox for the LLM's run_python tool. We wire
-    // LlamaMontyPlugin so Python the LLM writes can call llm_complete /
-    // llm_chat / llm_chat_reset recursively, the same surface available in
-    // the REPL panel.
+    // Agent runtime — Python sandbox for the LLM's run_python tool. We wire:
+    //  - LlamaMontyPlugin: llm_complete / llm_chat / llm_chat_reset
+    //  - ChatShellPlugin: chat_history / chat_summarize / chat_reset
+    // so the Python the LLM writes can introspect, summarize, and reset its
+    // own outer chat shell when context is getting long.
+    final chatShellPlugin = ChatShellPlugin(
+      engineRef: engineRef,
+      shell: () => _chatSession!,
+    );
     final agentSession = MontyRuntime(
       logger: const _ConsoleBridgeLogger(),
-      extensions: [LlamaMontyPlugin(engineRef)],
+      extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
     );
 
-    // REPL runtime — same LlamaMontyPlugin surface for ad-hoc tinkering.
+    // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
       logger: const _ConsoleBridgeLogger('repl'),
-      extensions: [LlamaMontyPlugin(engineRef)],
+      extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
     );
 
     final runPythonTool = ToolDefinition(
