@@ -43,6 +43,21 @@ print('first row:', data[1])
 Files at /fixtures/: welcome.md, sample.csv (name,quantity,price),
 notes.txt.
 
+For VERBOSE multi-step work, isolate it in a subagent so the messy
+intermediate output never bloats this chat:
+
+```python
+code = "data = ... ; print(answer)"   # the heavy work as a string
+h = sandbox_spawn(code)
+print(sandbox_await(h))
+sandbox_free(h)
+```
+
+Children inherit ALL host functions — `llm_complete`, `llm_chat`,
+`chat_history`, `chat_summarize`, etc. — so a child can summarize or
+compress the parent context and print the result back as one line.
+Only the child's final printed value bubbles up to this chat.
+
 Monty subset: no class / yield / with / decorators / .format() / %
 formatting / del. Allowed modules: math, re, json, datetime, pathlib.
 Use `round(x, 2)` and simple f-strings (no method calls inside braces).
@@ -445,14 +460,30 @@ class _ChatPageState extends State<ChatPage> {
     final agentSession = MontyRuntime(
       os: sharedOs,
       logger: const _ConsoleBridgeLogger(),
-      extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
+      extensions: [
+        LlamaMontyPlugin(engineRef),
+        chatShellPlugin,
+        // platformFactory uses createPlatformMonty (FFI on native, WASM
+        // on web) so children inherit the same backend the parent runs.
+        SandboxExtension(
+          platformFactory: () async => createPlatformMonty(),
+        ),
+      ],
     );
 
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
       os: sharedOs,
       logger: const _ConsoleBridgeLogger('repl'),
-      extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
+      extensions: [
+        LlamaMontyPlugin(engineRef),
+        chatShellPlugin,
+        // platformFactory uses createPlatformMonty (FFI on native, WASM
+        // on web) so children inherit the same backend the parent runs.
+        SandboxExtension(
+          platformFactory: () async => createPlatformMonty(),
+        ),
+      ],
     );
 
     // On web the fs is empty by default — seed a few fixtures so the LLM
@@ -621,6 +652,13 @@ else:
         String? finishReason;
         final rawContentBuffer = StringBuffer();
 
+        // Plant a streaming placeholder bubble that we'll update as
+        // chunks arrive. Index it so we can rewrite that exact entry
+        // every chunk, instead of appending fresh entries each tick.
+        _appendChatLog('assistant', '');
+        final streamIdx = _chatLog.length - 1;
+        var lastFlush = DateTime.now();
+
         // On web the WebGPU bridge's grammar sampler aborts when constraining
         // tool-call JSON — we drop tools entirely there and rely on the
         // ```python fence the system prompt asks for. On native FFI the
@@ -633,6 +671,31 @@ else:
           if (choice?.finishReason != null) finishReason = choice!.finishReason;
           final content = choice?.delta.content;
           if (content != null) rawContentBuffer.write(content);
+          // Throttle UI updates to ~30Hz so we don't repaint on every
+          // single token (which can choke on very fast streams).
+          final now = DateTime.now();
+          if (now.difference(lastFlush).inMilliseconds >= 33) {
+            lastFlush = now;
+            if (streamIdx < _chatLog.length) {
+              setState(() {
+                _chatLog[streamIdx] = (
+                  kind: 'assistant',
+                  text: rawContentBuffer.toString(),
+                );
+              });
+            }
+          }
+        }
+        // Drop the streaming placeholder unconditionally — the
+        // downstream paths below (fence-extraction, tool-call,
+        // prose-only) each render the final message in their own
+        // shape (e.g., split into prose + code + output bubbles).
+        // Visual effect: live tokens stream in, then on completion
+        // the bubble is replaced by the proper final rendering.
+        if (streamIdx < _chatLog.length) {
+          setState(() {
+            _chatLog.removeAt(streamIdx);
+          });
         }
 
         final rawContent = rawContentBuffer.toString();
