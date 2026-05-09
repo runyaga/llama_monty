@@ -521,8 +521,37 @@ class _ChatPageState extends State<ChatPage> {
     _appendChatLog(
       'sys',
       'Model loaded. Python runtime ready.\n'
-      'The LLM can execute Python via run_python — state persists across calls.',
+      'The LLM can execute Python via run_python — state persists across calls.\n\n'
+      'Slash commands:  /help  /summarize  /compress  /reset  /history  /files',
     );
+
+    // Also show what's in the seeded /fixtures/ directory so the user
+    // knows files are mounted and ready to read.
+    if (kIsWeb) {
+      try {
+        final ls = await agentSession.execute('''
+from pathlib import Path
+root = Path('/fixtures')
+if root.exists():
+  out = []
+  for p in root.iterdir():
+    txt = p.read_text() if p.is_file() else ''
+    out.append(p.name + ' (' + str(len(txt)) + ' bytes)')
+  print('\\n'.join(sorted(out)))
+else:
+  print('(none)')
+''').result;
+        final listing = (ls.printOutput ?? '').trim();
+        if (listing.isNotEmpty && listing != '(none)') {
+          _appendChatLog(
+            'sys',
+            '/fixtures contents:\n$listing\n\n'
+            'Try: "read welcome.md", "what\'s the average price in '
+            'sample.csv", or "summarize notes.txt".',
+          );
+        }
+      } catch (_) {/* fixture listing is best-effort */}
+    }
 
     _appendReplLog(
       'sys',
@@ -776,8 +805,9 @@ class _ChatPageState extends State<ChatPage> {
           'Slash commands:\n'
           '  /summarize           run chat_summarize_v2 and print the result\n'
           '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
-          '  /reset               chat_reset (wipe history, keep system prompt)\n'
+          '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
           '  /history             dump the current chat_history()\n'
+          '  /files [path]        list files under /fixtures (or any path)\n'
           '  /help                this list',
         );
       case '/summarize':
@@ -834,6 +864,28 @@ print('--- chat reset, seeded with summary ---')
           _appendChatLog('error', r.error!.message);
         } else {
           _appendChatLog('output', (r.printOutput ?? '').trim());
+        }
+      case '/files':
+        // List anything under /fixtures/ — the seed dir on web. Argument
+        // (if any) is treated as a different root.
+        final root = argText.isEmpty ? '/fixtures' : argText;
+        _appendChatLog('tool', "list($root)");
+        final r = await agent.execute('''
+from pathlib import Path
+p = Path('$root')
+if not p.exists():
+  print('(does not exist)')
+else:
+  for entry in sorted(p.iterdir(), key=lambda q: q.name):
+    if entry.is_file():
+      print(entry.name, '(' + str(len(entry.read_text())) + ' bytes)')
+    else:
+      print(entry.name + '/')
+''').result;
+        if (r.error != null) {
+          _appendChatLog('error', r.error!.message);
+        } else {
+          _appendChatLog('output', (r.printOutput ?? '(empty)').trim());
         }
       default:
         _appendChatLog(
