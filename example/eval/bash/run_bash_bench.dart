@@ -6,6 +6,7 @@
 //
 // Run: dart run example/eval/bash/run_bash_bench.dart
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -34,10 +35,22 @@ commands and returns
 `{'exit_code': N, 'stdout': '...', 'stderr': '...'}`.
 
 Allow-listed: pwd / cd / ls / cat / find / echo / wc / grep / head /
-tail / sort. && chains and `|` pipes work. cwd persists across calls.
+tail / sort / xargs. && chains and `|` pipes work. cwd persists
+across calls.
 
 If `exit_code != 0`, the command failed — `stderr` says why. Don't
 silently print empty `stdout` and pretend it worked.
+
+IMPORTANT shell semantics:
+- **No glob expansion.** `*` is NOT expanded. Don't write
+  `ls /dir/*.log` — it returns empty. To list files in a directory,
+  use `find /dir` (or `find /dir -type f` for files only).
+- **`grep` is fixed-string substring match, NOT regex.** `[`, `]`,
+  `^`, `\$`, `\\`, `.` are matched as literal characters. Don't
+  escape brackets — write `grep ERROR file`, not `grep "\[ERROR\]"
+  file`.
+- For "find X files matching pattern then run cmd on each," use
+  `find /dir | xargs cmd` or `cmd file1 file2 ...` directly.
 
 ```monty
 out = run_bash('echo hello')
@@ -237,6 +250,62 @@ Future<void> main(List<String> args) async {
 
   final wasmHost = WasmHostFfi.open(_dylibPath);
   final wasmBytes = File(_wasmPath).readAsBytesSync();
+
+  // ---------------------------------------------------------------
+  // Canonical-solution probe — runs each spec's `canonicalSolution`
+  // against the live wasm host (no LLM). Catches fixture / runtime
+  // drift before burning compute on a doomed bench.
+  // ---------------------------------------------------------------
+  stdout.writeln('\n========= canonical probe =========');
+  var canonicalFails = 0;
+  for (final tc in bashSpecs) {
+    if (tc.canonicalSolution == null) continue;
+    await wasmHost.resetSession();
+    await wasmHost.loadTree(bashVfs);
+    final out = await wasmHost.run(
+      wasmBytes,
+      stdin: Uint8List.fromList(utf8.encode(tc.canonicalSolution!)),
+    );
+    final raw = utf8.decode(out, allowMalformed: true);
+    final marker = RegExp(r'<host error -?\d+>').firstMatch(raw);
+    final firstLine =
+        raw.split('\n').firstWhere((l) => l.isNotEmpty, orElse: () => '');
+    if (marker != null) {
+      stdout.writeln('✗ ${tc.id.padRight(38)} ${marker.group(0)}');
+      canonicalFails++;
+    } else {
+      // Apply the spec's verify treating canonical stdout as the
+      // ground-truth-prose-and-stdout. GREEN = canonical fully
+      // satisfies the spec. YELLOW = runtime supports it but verify
+      // also checks LLM-prose-only fields the canonical can't fake.
+      final v = tc.verify(
+        finalProse: raw,
+        fences: [tc.canonicalSolution!],
+        stdouts: [raw],
+      );
+      final mark = v.ok ? '✓' : '~';
+      stdout.writeln(
+        '$mark ${tc.id.padRight(38)} ${firstLine.length > 60 ? "${firstLine.substring(0, 60)}..." : firstLine}',
+      );
+    }
+  }
+  if (canonicalFails > 0) {
+    stderr.writeln(
+      '\n$canonicalFails canonical probe(s) returned <host error -N>. '
+      'Fixture or runtime drift? Aborting before burning LLM compute.',
+    );
+    await wasmHost.dispose();
+    await engine.dispose();
+    exit(2);
+  }
+  stdout.writeln('canonical probe ok\n');
+
+  // Bail out if --probe-only was requested.
+  if (args.contains('--probe-only')) {
+    await wasmHost.dispose();
+    await engine.dispose();
+    return;
+  }
 
   // Per-spec replicate sweep so single-run flakes become statistical
   // signal. Each spec runs N times against a fresh wasm session +

@@ -19,12 +19,23 @@ class BashSpec {
     this.maxTurns = 4,
     this.minTurns,
     this.replicates,
+    this.canonicalSolution,
     this.knownFail = false,
   });
   final String id;
   final String prompt;
   final BashVerify verify;
   final int maxTurns;
+
+  /// Optional bash command the harness can execute directly (NO LLM)
+  /// to confirm the spec is reachable. Run at bench startup against
+  /// the live wasm host; aborts the bench if the command returns
+  /// `<host error -N>`. The LLM never sees this string. Two uses:
+  /// (1) catch fixture / runtime drift before burning LLM compute;
+  /// (2) attribute fail mode — when LLM scores 0/N but canonical
+  /// passes, the gap is model-side; when canonical also fails, the
+  /// gap is runtime-side.
+  final String? canonicalSolution;
 
   /// Minimum number of assistant chat turns the spec requires. If the
   /// model finishes faster (e.g. answers in one fence + prose), the
@@ -177,6 +188,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['hello'],
       proseContainsAll: ['hello'],
     ),
+    canonicalSolution: 'echo hello',
   ),
   BashSpec(
     id: 'B02_echo_multi_arg',
@@ -186,6 +198,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['foo bar baz'],
       proseContainsAll: ['foo bar baz'],
     ),
+    canonicalSolution: 'echo foo bar baz',
   ),
   BashSpec(
     id: 'B03_pwd_root',
@@ -196,6 +209,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['/'],
       proseContainsAny: ['/'],
     ),
+    canonicalSolution: 'pwd',
   ),
 
   // Tier 2 — file reads (2)
@@ -209,6 +223,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['todo'],
       proseContainsAny: ['todo', 'finish'],
     ),
+    canonicalSolution: 'cat /tmp/llama-test/fixtures/notes.txt',
   ),
   BashSpec(
     id: 'B05_cat_numbers',
@@ -220,6 +235,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['42'],
       proseContainsAll: ['42'],
     ),
+    canonicalSolution: 'tail -n 1 /tmp/llama-test/fixtures/numbers.txt',
   ),
 
   // Tier 3 — listings (2)
@@ -233,6 +249,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['greeting.txt', 'numbers.txt'],
       proseContainsAll: ['greeting.txt'],
     ),
+    canonicalSolution: 'ls /tmp/llama-test/fixtures',
   ),
   BashSpec(
     id: 'B07_find_root',
@@ -246,6 +263,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       ],
       proseContainsAny: ['/tmp/llama-test/fixtures/notes.txt', 'notes.txt'],
     ),
+    canonicalSolution: 'find /',
   ),
 
   // Tier 4 — navigation with cd + chaining (3)
@@ -260,6 +278,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['/tmp/llama-test/fixtures'],
     ),
     maxTurns: 5,
+    canonicalSolution: 'cd /tmp/llama-test/fixtures && pwd',
   ),
   BashSpec(
     id: 'B09_cd_then_ls',
@@ -271,6 +290,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['greeting.txt', 'numbers.txt'],
       proseContainsAll: ['greeting.txt'],
     ),
+    canonicalSolution: 'cd /tmp/llama-test/fixtures && ls',
   ),
   BashSpec(
     id: 'B10_cd_then_cat',
@@ -282,6 +302,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['hello, world!'],
       proseContainsAny: ['hello, world!', 'hello world'],
     ),
+    canonicalSolution: 'cd /tmp/llama-test/fixtures && cat greeting.txt',
   ),
 
   // Tier 5 — multi-call (cwd persists across SEPARATE run_bash calls) (2)
@@ -297,6 +318,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['/tmp/llama-test/fixtures'],
     ),
     maxTurns: 5,
+    canonicalSolution: 'cd /tmp/llama-test/fixtures && pwd',
   ),
   BashSpec(
     id: 'B12_find_then_cat',
@@ -311,6 +333,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['INFO', 'booted'],
     ),
     maxTurns: 6,
+    canonicalSolution: 'cat /tmp/llama-test/state/app.log',
   ),
 
   // Tier 6 — Python + bash composition. Dropped 2026-05-09 — these
@@ -334,6 +357,9 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     verify: _v(
       proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
     ),
+    // Canonical = the rejection itself. Probe should see <host error -3>.
+    // We DON'T set canonicalSolution here because that would abort the
+    // bench (the probe currently treats <host error> as fatal). Skip.
   ),
   // Phase Next-N1 added pipes. Was a knownFail rejection check; now
   // tests the happy path — the model should chain commands with `|`
@@ -348,6 +374,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       stdoutContainsAll: ['1', '2'],
       proseContainsAll: ['1', '2'],
     ),
+    canonicalSolution:
+        'cat /tmp/llama-test/fixtures/numbers.txt | head -n 2',
   ),
 
   // Tier 8 — advanced multi-stage pipes (newly possible post-A1+N1+N1.5).
@@ -364,6 +392,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['20'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep INFO | wc -l',
   ),
   BashSpec(
     id: 'A02_top_max',
@@ -376,6 +406,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['99'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/fixtures/scores.txt | sort -nr | head -n 1',
   ),
   BashSpec(
     id: 'A03_unique_count',
@@ -388,6 +420,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['15'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/fixtures/scores.txt | sort -u | wc -l',
   ),
   BashSpec(
     id: 'A04_chain_4stage',
@@ -401,6 +435,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['4'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep INFO | sort -u | wc -l',
   ),
 
   // Tier 9 — multi-turn agentic tasks. Model should take its first
@@ -417,6 +453,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['boot', 'INFO'],
     ),
     maxTurns: 6,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep INFO | head -n 1',
   ),
   BashSpec(
     id: 'M02_count_by_severity',
@@ -429,6 +467,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['20', '15', '10'],
     ),
     maxTurns: 5,
+    // Multi-call ground truth — pick the highest count for the probe.
+    canonicalSolution: 'grep -c INFO /tmp/llama-test/state/big.log',
   ),
 
   // Tier 10 — stable rejection sentinel. Per upstream's recommendation:
@@ -444,6 +484,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     verify: _v(
       proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
     ),
+    // Canonical = rejection. Skip probe (would abort the bench).
   ),
 
   // Tier 11 — sophisticated single-fence pipes (S-tier, post-N3).
@@ -463,6 +504,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['45'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep -v DEBUG | wc -l',
   ),
   BashSpec(
     id: 'S02_first_error',
@@ -476,6 +519,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['auth failed', 'auth'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep ERROR | head -n 1',
   ),
   BashSpec(
     id: 'S03_smallest_score',
@@ -489,6 +534,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['12'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'cat /tmp/llama-test/fixtures/scores.txt | sort -n | head -n 1',
   ),
   BashSpec(
     id: 'S04_total_distinct_lines',
@@ -502,6 +549,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['10'],
     ),
     maxTurns: 4,
+    canonicalSolution:
+        'sort -u /tmp/llama-test/state/big.log | wc -l',
   ),
   BashSpec(
     id: 'S05_count_specific_message',
@@ -515,6 +564,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['5'],
     ),
     maxTurns: 4,
+    canonicalSolution: 'grep -c timeout /tmp/llama-test/state/big.log',
   ),
   BashSpec(
     id: 'S06_distinct_severities_via_grep',
@@ -528,6 +578,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['INFO', 'ERROR', 'WARN', 'DEBUG'],
     ),
     maxTurns: 5,
+    canonicalSolution: 'grep -c INFO /tmp/llama-test/state/big.log',
   ),
 
   // Tier 12 — decomposition (D-tier). Tasks that need 2-3 dependent
@@ -545,6 +596,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAll: ['big.log', '50'],
     ),
     maxTurns: 6,
+    canonicalSolution:
+        'wc -l /tmp/llama-test/state/app.log /tmp/llama-test/state/big.log',
   ),
   BashSpec(
     id: 'D02_first_error_message_text',
@@ -557,6 +610,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['auth failed', 'auth'],
     ),
     maxTurns: 6,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/big.log | grep ERROR | head -n 1',
   ),
   // Diff-detect: model has to compare two near-identical files
   // WITHOUT a `diff` command. Strategy is open — cat both, eyeball
@@ -574,6 +629,10 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['gamma', 'GAMMA', 'line 3'],
     ),
     maxTurns: 6,
+    // Canonical: cat both, harness sees "GAMMA" in stdout — proves
+    // the differ-line is reachable. LLM still has to articulate.
+    canonicalSolution:
+        'cat /tmp/llama-test/configs/v2.txt',
   ),
 
   // Tier 13 — cross-turn (X-tier). Tasks where the next call's
@@ -597,6 +656,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     minTurns: 2,
     maxTurns: 6,
     replicates: 5,
+    canonicalSolution:
+        'wc -l /tmp/llama-test/state/app.log /tmp/llama-test/state/big.log',
   ),
   BashSpec(
     id: 'X02_iterative_refinement',
@@ -614,6 +675,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     minTurns: 2,
     maxTurns: 6,
     replicates: 5,
+    canonicalSolution:
+        'sort -u /tmp/llama-test/fixtures/scores.txt | sort -nr | head -n 3',
   ),
   BashSpec(
     id: 'X03_count_then_extract_first',
@@ -629,6 +692,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     minTurns: 2,
     maxTurns: 6,
     replicates: 5,
+    canonicalSolution: 'grep -c ERROR /tmp/llama-test/state/big.log',
   ),
   BashSpec(
     id: 'X04_explore_two_dirs',
@@ -646,5 +710,102 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     minTurns: 2,
     maxTurns: 6,
     replicates: 5,
+    canonicalSolution: 'ls /tmp/llama-test/fixtures',
+  ),
+
+  // Tier 14 — stretch cross-turn (Y-tier). Tasks that NEED 3+ chat
+  // turns: each turn's call depends on the previous turn's data,
+  // and there's no cheap one-shot solution. minTurns: 3 enforces
+  // genuine multi-turn reasoning. All run at N=5 to handle expected
+  // flakiness at this depth.
+  //
+  // Two flavors: "discover-then-drill" (Y01-Y02 explore the
+  // structure, pick a target, drill into it) and "iterative-narrow"
+  // (Y03-Y04 progressively filter the same data).
+  BashSpec(
+    id: 'Y01_explore_then_pick_smallest_log',
+    prompt:
+        'Use run_bash across MULTIPLE separate calls to investigate '
+        '/tmp/llama-test/state. (1) First, list the .log files there. '
+        '(2) Then count their lines and identify the SMALLEST file. '
+        '(3) Then read that smallest file and tell me its first INFO '
+        'line (the actual message text).',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // app.log has 2 lines (smaller than big.log's 50). First INFO
+      // line is "[INFO] booted".
+      proseContainsAny: ['booted', 'app.log'],
+    ),
+    minTurns: 3,
+    maxTurns: 8,
+    replicates: 5,
+    canonicalSolution:
+        'cat /tmp/llama-test/state/app.log | grep INFO | head -n 1',
+  ),
+  BashSpec(
+    id: 'Y02_explore_then_count_errors_in_dir',
+    prompt:
+        'Use run_bash across MULTIPLE separate calls. (1) First, list '
+        'the top-level directories under /tmp/llama-test. (2) Then '
+        'pick the one that contains log files and list its contents. '
+        '(3) Then count the total ERROR lines across ALL log files in '
+        'that directory. Tell me the total ERROR count.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // state/ has app.log (1 ERROR) + big.log (15 ERRORs) = 16.
+      proseContainsAny: ['16', '15'],
+    ),
+    minTurns: 3,
+    maxTurns: 8,
+    replicates: 5,
+    canonicalSolution: 'grep -c ERROR /tmp/llama-test/state/big.log',
+  ),
+  // Y03/Y04 redesigned 2026-05-09: original specs had no real data
+  // dependency between calls, so the model correctly packed the work
+  // into one fence + prose (turns=2) and the minTurns=3 gate failed
+  // them despite correct answers. New specs require turn N's call
+  // arguments to be DERIVED from turn N-1's output — making one-shot
+  // solutions structurally impossible.
+  BashSpec(
+    id: 'Y03_pick_busiest_logfile',
+    prompt:
+        'Use run_bash across SEPARATE calls to figure out which .log '
+        'file under /tmp/llama-test/state has the MOST ERROR lines. '
+        '(1) First list the .log files there. (2) Then, USING THE '
+        'NAMES YOU SAW, count ERRORs in each file separately (one '
+        'call per file). (3) Report the busiest filename and its '
+        'count.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // big.log has 15 ERRORs, app.log has 1.
+      proseContainsAll: ['big.log', '15'],
+    ),
+    minTurns: 3,
+    maxTurns: 8,
+    replicates: 5,
+    canonicalSolution: 'grep -c ERROR /tmp/llama-test/state/big.log',
+  ),
+  BashSpec(
+    id: 'Y04_drill_into_first_error_type',
+    prompt:
+        'Investigate /tmp/llama-test/state/big.log step by step. '
+        '(1) First, extract just the FIRST ERROR line in the file. '
+        '(2) Then, USING THE EXACT MESSAGE TEXT YOU JUST SAW, count '
+        'how many times that SAME message appears in the file. Tell '
+        'me the message text AND the count.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // First ERROR is "[ERROR] auth failed"; "auth failed" appears 5 times.
+      proseContainsAll: ['auth failed', '5'],
+    ),
+    minTurns: 3,
+    maxTurns: 8,
+    replicates: 5,
+    // NB: `grep -c "auth failed" <file>` returns -4 because upstream
+    // tokenizes quoted args on inner whitespace before quote-strip
+    // (per their PHASE_N3_NOTE limitation). Using single-word pattern
+    // for the probe; the LLM may hit the same bug at run time.
+    canonicalSolution:
+        r'grep -c auth /tmp/llama-test/state/big.log',
   ),
 ];
