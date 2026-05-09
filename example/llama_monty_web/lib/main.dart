@@ -900,10 +900,9 @@ else:
       // when the LLM emits no fence (just prose) OR when the
       // accumulated context-token budget exceeds [maxContextTokens]. A
       // hard turn cap guards against an infinite loop on a confused
-      // model.
-      const maxContextTokens = 6000;
-      const hardTurnCap = 12;
-      var fenceTurns = 0;
+      // model. (Iteration is curtailed in deterministic-answer mode —
+      // we break right after the first successful fence — but we keep
+      // these caps in case the model hits the error-retry path.)
       var toolRetries = 0;
       const maxToolRetries = 3;
       var errorNudgeCount = 0;
@@ -1103,6 +1102,13 @@ else:
               ),
             );
           }
+          // Deterministic-answer mode: the tool's print output is the
+          // answer; we don't ask the LLM for prose because Gemma 4 E2B
+          // routinely hallucinates values that contradict the print
+          // (e.g. printed "3" → wrote prose "6"). The user reads the
+          // output bubble directly. If a tool call ERRORED we fall
+          // through to the retry path instead.
+          if (!lastRoundHadError) break;
           parts = [];
         } else {
           if (lastRoundHadError && errorNudgeCount < maxErrorNudges) {
@@ -1208,31 +1214,12 @@ else:
               parts = [];
               continue;
             }
-            // Success: keep looping so the LLM can react to the output
-            // and decompose the task into the next small step. Stops
-            // when the LLM emits no fence (just prose) OR when the
-            // context-token budget is exhausted.
-            fenceTurns++;
-            await _updateContextTokens();
-            if (_contextTokens >= maxContextTokens) {
-              _appendChatLog(
-                'sys',
-                'Stopping iteration: context at $_contextTokens '
-                    'tokens (cap $maxContextTokens). Type something to '
-                    'continue, or /compress to summarize and reset.',
-              );
-              break;
-            }
-            if (fenceTurns >= hardTurnCap) {
-              _appendChatLog(
-                'sys',
-                'Stopping iteration: hit hard $hardTurnCap-step cap. '
-                    'Type "continue" to keep going.',
-              );
-              break;
-            }
-            parts = [];
-            continue;
+            // Deterministic-answer mode: the tool's print output is
+            // the answer. Don't loop back asking the model for prose
+            // — Gemma 4 E2B's grounding is unreliable at 2B params
+            // (printed "3" → wrote prose "6"). User reads the output
+            // bubble. Type a follow-up question for the next step.
+            break;
           }
 
           if (text.isNotEmpty) _appendChatLog('assistant', text);
