@@ -699,6 +699,10 @@ else:
       var errorNudgeCount = 0;
       const maxErrorNudges = 4;
       var lastRoundHadError = false;
+      // Captured on every fence/tool failure so the retry nudge can
+      // refer to the EXACT bad code and error when we reset history.
+      String? lastFailedCode;
+      String? lastFailedError;
 
       while (true) {
         String? finishReason;
@@ -854,7 +858,11 @@ else:
                 resultStr = 'Error: $e';
                 _appendChatLog('error', resultStr);
               }
-              if (resultStr.startsWith('Error:')) lastRoundHadError = true;
+              if (resultStr.startsWith('Error:')) {
+                lastRoundHadError = true;
+                lastFailedCode = effectiveArgs['code']?.toString() ?? '';
+                lastFailedError = resultStr;
+              }
             }
 
             _chatSession!.addMessage(
@@ -877,18 +885,20 @@ else:
             lastRoundHadError = false;
             _appendChatLog(
               'sys',
-              'LLM skipped retry after error — nudging ($errorNudgeCount/$maxErrorNudges)',
+              'LLM skipped retry after error — resetting context and nudging '
+              '($errorNudgeCount/$maxErrorNudges)',
             );
             // ignore: avoid_print
             print(
-              '[app] nudging LLM to retry after error ($errorNudgeCount/$maxErrorNudges)',
+              '[app] context-reset retry after error '
+              '($errorNudgeCount/$maxErrorNudges)',
             );
-            parts = [
-              LlamaTextContent(
-                'You received a Python error from the tool. '
-                'Do not answer yet — fix the code and call run_python again.',
-              ),
-            ];
+            _resetChatWithPointedRetry(
+              originalPrompt: msg,
+              code: lastFailedCode ?? '',
+              error: lastFailedError ?? 'unknown error',
+            );
+            parts = [];
             continue;
           }
 
@@ -942,19 +952,26 @@ else:
                 ],
               ),
             );
-            // On error: nudge the model to fix the code and try again.
+            // On error: reset chat history so the bad fence isn't in the
+            // model's KV cache anchoring the next attempt, then replay the
+            // ORIGINAL user prompt with a pointed corrective hint as one
+            // consolidated user turn. This is what actually breaks the
+            // "model keeps regenerating the same broken code" loop.
             if (fenceFailed && errorNudgeCount < maxErrorNudges) {
               errorNudgeCount++;
+              lastFailedCode = fenceCode;
+              lastFailedError = resultStr;
               _appendChatLog(
                 'sys',
-                'Code failed — asking LLM to fix and retry '
-                    '($errorNudgeCount/$maxErrorNudges)',
+                'Code failed — resetting context, replaying prompt with hint '
+                '($errorNudgeCount/$maxErrorNudges)',
               );
-              parts = [
-                LlamaTextContent(
-                  _pointedNudge(code: fenceCode, error: resultStr),
-                ),
-              ];
+              _resetChatWithPointedRetry(
+                originalPrompt: msg,
+                code: fenceCode,
+                error: resultStr,
+              );
+              parts = [];
               continue;
             }
             // Success: keep looping so the LLM can react to the output
@@ -1213,6 +1230,35 @@ else:
       '[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 80 ? 80 : cleaned.length)}',
     );
     return null;
+  }
+
+  /// Wipes the LLM chat history (keeping the system prompt) and replays
+  /// the user's original task as a single consolidated user turn that
+  /// includes a pointed corrective hint. The model never sees its own
+  /// previous bad reply in context, so it isn't anchored on the broken
+  /// code in the KV cache. Without this, weak models (like Gemma 4 E2B)
+  /// regenerate the same `import os` / `with open` over and over even
+  /// when we feed them an explicit "use pathlib" nudge.
+  void _resetChatWithPointedRetry({
+    required String originalPrompt,
+    required String code,
+    required String error,
+  }) {
+    final hint = _pointedNudge(code: code, error: error);
+    final consolidated = StringBuffer()
+      ..writeln(originalPrompt)
+      ..writeln()
+      ..writeln('NOTE: a previous attempt at this exact task failed. '
+          'Read the correction below and rewrite the program from scratch.')
+      ..writeln()
+      ..writeln(hint);
+    _chatSession!.reset();
+    _chatSession!.addMessage(
+      LlamaChatMessage.fromText(
+        role: LlamaChatRole.user,
+        text: consolidated.toString(),
+      ),
+    );
   }
 
   /// Pre-flight gate for `run_python`: returns a non-null error message
