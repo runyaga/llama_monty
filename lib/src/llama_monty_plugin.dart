@@ -1,9 +1,29 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llamadart/llamadart.dart';
 
 import 'llama_engine_ref.dart';
 
-/// A [MontyPlugin] that exposes a local LLM to Python code running in Monty.
+/// Internal state for a single streaming completion: a buffered queue of
+/// already-arrived chunks plus a waiter the consumer awaits when the queue
+/// is empty.
+class _StreamHandle {
+  final ListQueue<String> buffer = ListQueue();
+  bool done = false;
+  Object? error;
+  Completer<void>? waiter;
+  StreamSubscription<dynamic>? sub;
+
+  void wake() {
+    final w = waiter;
+    waiter = null;
+    if (w != null && !w.isCompleted) w.complete();
+  }
+}
+
+/// A [MontyExtension] that exposes a local LLM to Python code running in Monty.
 ///
 /// Registers three host functions:
 /// - `llm_complete(prompt, [system_prompt])` — stateless single-turn completion
@@ -27,9 +47,9 @@ import 'llama_engine_ref.dart';
 /// - The [LlamaEngine] inside [LlamaEngineRef] must be loaded before any
 ///   Python code calls these functions. Use [LlamaEngine.loadModelFromUrl]
 ///   on the WASM/Web platform.
-/// - The dart_monty bridge must be configured with `useFutures: true` so that
-///   async host functions are dispatched via the `MontyFutureCapable` path.
-class LlamaMontyPlugin extends MontyPlugin {
+/// - The dart_monty bridge must be initialised before any Python code calls
+///   these functions. Call `DartMonty.ensureInitialized()` on web.
+class LlamaMontyPlugin extends MontyExtension {
   /// Creates a [LlamaMontyPlugin] backed by [engineRef].
   LlamaMontyPlugin(this._engineRef)
     : _chatSession = ChatSession(_engineRef.engine);
@@ -43,16 +63,21 @@ class LlamaMontyPlugin extends MontyPlugin {
   /// across multiple plugin instances.
   LlamaEngineRef get engineRef => _engineRef;
 
+  /// The chat session backing `llm_chat` / `llm_chat_reset`.
+  ///
+  /// Exposed for inspection (e.g. reading `systemPrompt` after a reset).
+  ChatSession get chatSession => _chatSession;
+
   @override
   String get namespace => 'llm';
 
-  /// Creates a child instance for a spawned sandbox.
-  ///
-  /// The child shares the parent's [LlamaEngineRef] (and therefore the same
-  /// [LlamaEngine] and lock), but gets its own fresh [ChatSession] so history
-  /// is isolated per child.
+  /// Children clone this extension with a fresh [ChatSession] but share the
+  /// parent's [LlamaEngineRef] (and its lock) so inference is serialised.
   @override
-  LlamaMontyPlugin createChildInstance({ChildSpawnContext? context}) =>
+  ChildPolicy get childPolicy => ChildPolicy.clone;
+
+  @override
+  LlamaMontyPlugin createChildInstance(ChildSpawnContext context) =>
       LlamaMontyPlugin(_engineRef);
 
   @override
@@ -60,9 +85,18 @@ class LlamaMontyPlugin extends MontyPlugin {
     _llmCompleteFunction,
     _llmChatFunction,
     _llmChatResetFunction,
+    _llmStreamOpenFunction,
+    _llmStreamNextFunction,
+    _llmStreamCloseFunction,
   ];
 
+  // Open streams keyed by integer handle. Reused across the lifetime of
+  // this plugin instance.
+  final Map<int, _StreamHandle> _streams = {};
+  int _nextStreamId = 1;
+
   late final HostFunction _llmCompleteFunction = HostFunction(
+    dispatch: DispatchMode.sync,
     schema: const HostFunctionSchema(
       name: 'llm_complete',
       description:
@@ -85,7 +119,10 @@ class LlamaMontyPlugin extends MontyPlugin {
     handler: _handleLlmComplete,
   );
 
-  Future<Object?> _handleLlmComplete(Map<String, Object?> args) async {
+  Future<Object?> _handleLlmComplete(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
     final prompt = args['prompt'] as String;
     final systemPrompt = args['system_prompt'] as String?;
 
@@ -106,6 +143,7 @@ class LlamaMontyPlugin extends MontyPlugin {
   // ---------------------------------------------------------------------------
 
   late final HostFunction _llmChatFunction = HostFunction(
+    dispatch: DispatchMode.sync,
     schema: const HostFunctionSchema(
       name: 'llm_chat',
       description:
@@ -131,7 +169,10 @@ class LlamaMontyPlugin extends MontyPlugin {
     handler: _handleLlmChat,
   );
 
-  Future<Object?> _handleLlmChat(Map<String, Object?> args) async {
+  Future<Object?> _handleLlmChat(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
     final message = args['message'] as String;
     final systemPrompt = args['system_prompt'] as String?;
 
@@ -155,6 +196,7 @@ class LlamaMontyPlugin extends MontyPlugin {
   // ---------------------------------------------------------------------------
 
   late final HostFunction _llmChatResetFunction = HostFunction(
+    dispatch: DispatchMode.sync,
     schema: const HostFunctionSchema(
       name: 'llm_chat_reset',
       description:
@@ -175,9 +217,166 @@ class LlamaMontyPlugin extends MontyPlugin {
     handler: _handleLlmChatReset,
   );
 
-  Future<Object?> _handleLlmChatReset(Map<String, Object?> args) async {
+  Future<Object?> _handleLlmChatReset(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
     final keepSystemPrompt = args['keep_system_prompt'] as bool? ?? true;
     _chatSession.reset(keepSystemPrompt: keepSystemPrompt);
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // llm_stream_* — pull-handle streaming
+  //
+  // Three host functions implement a Python-friendly streaming pattern that
+  // does not need generators or callbacks (Monty supports neither). The LLM-
+  // written Python looks like:
+  //
+  //     h = llm_stream_open("write a haiku about cats")
+  //     while True:
+  //         chunk = llm_stream_next(h)
+  //         if chunk is None: break
+  //         print(chunk, end='')
+  //     llm_stream_close(h)
+  //
+  // The stream is consumed inside the engine's lock so it composes with
+  // llm_complete / llm_chat — concurrent stream opens queue.
+  // ---------------------------------------------------------------------------
+
+  late final HostFunction _llmStreamOpenFunction = HostFunction(
+    dispatch: DispatchMode.sync,
+    schema: const HostFunctionSchema(
+      name: 'llm_stream_open',
+      description:
+          'Begin a streaming completion. Returns an integer handle that '
+          'identifies the stream — pass it to llm_stream_next to read '
+          'chunks and to llm_stream_close when you are done.',
+      params: [
+        HostParam(
+          name: 'prompt',
+          type: HostParamType.string,
+          description: 'The user message to stream a response for.',
+        ),
+        HostParam(
+          name: 'system_prompt',
+          type: HostParamType.string,
+          isRequired: false,
+          description:
+              'Optional system instruction prepended before the prompt.',
+        ),
+      ],
+    ),
+    handler: _handleLlmStreamOpen,
+  );
+
+  Future<Object?> _handleLlmStreamOpen(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
+    final prompt = args['prompt'] as String;
+    final systemPrompt = args['system_prompt'] as String?;
+
+    final messages = <LlamaChatMessage>[
+      if (systemPrompt != null && systemPrompt.isNotEmpty)
+        LlamaChatMessage.fromText(
+          role: LlamaChatRole.system,
+          text: systemPrompt,
+        ),
+      LlamaChatMessage.fromText(role: LlamaChatRole.user, text: prompt),
+    ];
+
+    final id = _nextStreamId++;
+    final handle = _StreamHandle();
+    _streams[id] = handle;
+
+    // Start the stream behind the engine lock so this serialises with
+    // llm_complete / llm_chat / other open streams. The future is *not*
+    // awaited here — we just kick it off and return the handle.
+    unawaited(_engineRef.withLock(() async {
+      try {
+        await for (final chunk in _engineRef.engine.create(messages)) {
+          final content = chunk.choices.firstOrNull?.delta.content;
+          if (content != null && content.isNotEmpty) {
+            handle.buffer.add(content);
+            handle.wake();
+          }
+        }
+      } catch (e) {
+        handle.error = e;
+      } finally {
+        handle.done = true;
+        handle.wake();
+      }
+    }));
+
+    return id;
+  }
+
+  late final HostFunction _llmStreamNextFunction = HostFunction(
+    dispatch: DispatchMode.sync,
+    schema: const HostFunctionSchema(
+      name: 'llm_stream_next',
+      description:
+          'Read the next chunk from an open stream. Blocks until a chunk '
+          'arrives or the stream completes. Returns the chunk as a string, '
+          'or None when the stream is finished. Raises if the handle is '
+          'unknown or the stream errored.',
+      params: [
+        HostParam(
+          name: 'handle',
+          type: HostParamType.integer,
+          description: 'The id returned by llm_stream_open.',
+        ),
+      ],
+    ),
+    handler: _handleLlmStreamNext,
+  );
+
+  Future<Object?> _handleLlmStreamNext(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
+    final id = args['handle'] as int;
+    final h = _streams[id];
+    if (h == null) {
+      throw StateError('llm_stream_next: unknown handle $id');
+    }
+    while (h.buffer.isEmpty && !h.done) {
+      h.waiter ??= Completer<void>();
+      await h.waiter!.future;
+    }
+    if (h.buffer.isNotEmpty) return h.buffer.removeFirst();
+    if (h.error != null) {
+      throw StateError('llm_stream_next: stream errored: ${h.error}');
+    }
+    return null; // exhausted
+  }
+
+  late final HostFunction _llmStreamCloseFunction = HostFunction(
+    dispatch: DispatchMode.sync,
+    schema: const HostFunctionSchema(
+      name: 'llm_stream_close',
+      description:
+          'Release a stream handle. Safe to call after the stream has '
+          'already drained — extra closes are no-ops.',
+      params: [
+        HostParam(
+          name: 'handle',
+          type: HostParamType.integer,
+          description: 'The id returned by llm_stream_open.',
+        ),
+      ],
+    ),
+    handler: _handleLlmStreamClose,
+  );
+
+  Future<Object?> _handleLlmStreamClose(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
+    final id = args['handle'] as int;
+    _streams.remove(id);
     return null;
   }
 }
