@@ -17,8 +17,10 @@ Future<void> exampleUsage() async {
   final engine = LlamaEngine(LlamaBackend());
 
   // 2. Load a GGUF model (URL-based on Web; path-based on native).
+  // Gemma 4 2B instruction-tuned model (Q4_K_M, ~1.5 GB).
+  // Full model list: https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF
   await engine.loadModelFromUrl(
-    'https://example.com/model.Q4_K_M.gguf',
+    'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf',
     onProgress: (p) => print('Loading: ${(p * 100).toInt()}%'),
   );
 

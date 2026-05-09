@@ -1,4 +1,5 @@
-import 'package:dart_monty/dart_monty_bridge.dart' show HostFunctionSchema;
+import 'package:dart_monty/dart_monty_bridge.dart'
+    show ChildSpawnContext, HostFunctionSchema;
 import 'package:llamadart/llamadart.dart';
 import 'package:test/test.dart';
 
@@ -170,12 +171,9 @@ void main() {
       });
     });
 
-    test('no stream wrapper by default', () {
-      expect(plugin.hasStreamWrapper, isFalse);
-    });
-
     test('createChildInstance returns a new LlamaMontyPlugin', () {
-      final child = plugin.createChildInstance();
+      const ctx = ChildSpawnContext(childId: 1);
+      final child = plugin.createChildInstance(ctx);
       expect(child, isA<LlamaMontyPlugin>());
       expect(child, isNot(same(plugin)));
     });
@@ -184,7 +182,8 @@ void main() {
       final engine = LlamaEngine(_StubBackend());
       final ref = LlamaEngineRef(engine);
       final parent = LlamaMontyPlugin(ref);
-      final child = parent.createChildInstance() as LlamaMontyPlugin;
+      const ctx = ChildSpawnContext(childId: 1);
+      final child = parent.createChildInstance(ctx) as LlamaMontyPlugin;
       expect(child.engineRef, same(ref));
     });
   });

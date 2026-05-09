@@ -1,0 +1,10 @@
+custom_html_template_path: test/browser_test_template.html
+
+# Long-running model downloads and inference need an extended timeout.
+timeout: 10x
+
+tags:
+  integration:
+    timeout: 30x
+  wasm:
+    timeout: 5x

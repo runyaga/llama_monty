@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{testName}}</title>
+  <!--
+    Load the dart_monty_core bridge before the test script runs.
+    dart test serves package lib/ directories under /packages/<name>/.
+    window.DartMontyBridge is set synchronously; sessions open lazily.
+  -->
+  <script src="packages/dart_monty_core/assets/dart_monty_core_bridge.js"></script>
+  {{testScript}}
+  <script src="packages/test/dart.js"></script>
+</head>
+<body></body>
+</html>

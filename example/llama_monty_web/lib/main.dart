@@ -75,16 +75,57 @@ Inside the fence you can call these:
 When the user asks you to "compress" or "reset" the conversation, write
 Python that calls those.
 
-## Monty Python sandbox — restrictions
-The Python runs inside Monty, a restricted subset:
-- NO class keyword — use dicts
-- NO yield/generators — use for-loops and lists
-- NO match/case, del, decorators
-- NO hasattr/callable/format builtins
-- NO collections, functools, itertools, numpy, pandas
-- NO chained assignment (i = j = 0)
-- NO tuple unpacking in for-loop headers: use indexing
-- Supported modules: math, re, json, datetime
+## Monty Python sandbox — RULES YOU MUST FOLLOW
+
+The Python runs inside Monty, a restricted subset. The host's parser
+will REJECT code that breaks these rules. Each rule here was learned
+from a real failure during testing — read the **why** so you don't
+repeat the mistake.
+
+LANGUAGE FEATURES NOT AVAILABLE
+- NO `class` keyword. Use plain dicts for structured data:
+    `state = {'count': 0}` instead of `class State: ...`
+- NO `yield` / generators. Use a list and append, then iterate.
+- NO `match`/`case`. Use `if/elif/else`.
+- NO `del`. Reassign or build a new collection.
+- NO decorators (`@something`). For memoization use a module-level
+  cache dict — if it's in the cache return the cached value, else
+  compute, store, return. (This works; we tested it.)
+- NO `with` / context managers. Use `try/except`+`try/finally` and
+  call `.read_text()` / `.write_text()` directly. Specifically:
+    NOT `with open(p) as f: data = f.read()`
+    BUT `data = Path(p).read_text()`
+  (P4 tested this: `with` is the most common bug we see.)
+
+STRING FORMATTING — neither `.format()` nor `%` work
+- `"{:.2f}".format(x)`        ← REJECTED (no .format method)
+- `"%.2f" % x`                ← REJECTED (operator unsupported)
+- Use `round(x, 2)` and stringify, or use f-strings carefully.
+  Simple f-strings WITHOUT method calls work, e.g. `f"x = {x}"`.
+- NO `format()` builtin, NO `hasattr`, NO `callable`.
+
+SYNTAX TRAPS THE 2B MODEL OFTEN FORGETS
+- Every `if`, `while`, `for`, `def`, `try`, `except`, `else` MUST end
+  with `:`. Triple-check every header line — a missing colon is the
+  most common parse failure we see.
+- Indentation must be consistent.
+- NO chained assignment: write `i = 0` newline `j = 0`, NOT `i=j=0`.
+- NO tuple unpacking in for-loop headers:
+    NOT `for k, v in d.items():`
+    BUT `for k in d: v = d[k]; ...`
+
+PATHLIB
+- `Path(p).read_text()` ✓        `Path(p).write_text(s)` ✓
+- `Path(p).iterdir()` returns Path objects.
+  Use `.name` (ATTRIBUTE, not a method): `p.name` ✓, `p.name()` ✗.
+- `.exists()`, `.is_file()`, `.is_dir()` work.
+
+LIBRARIES — only these:  math, re, json, datetime, pathlib
+NO  collections, functools, itertools, numpy, pandas, csv, os, requests.
+
+When the host re-prompts you with an error message from Monty, READ IT
+CAREFULLY — it tells you exactly which rule above was broken. Fix that
+specific issue and retry. Don't rewrite the whole program.
 ''';
 
 const _systemPrompt = '''
@@ -482,6 +523,23 @@ class _ChatPageState extends State<ChatPage> {
         final code = params.getRequiredString('code');
         _appendChatLog('code', code);
 
+        // Pre-flight: ask Monty to typecheck the code WITHOUT executing.
+        // Catches missing colons, unsupported features (`with`, `class`,
+        // `.format()`, etc.) before we burn time on execute(). Errors are
+        // returned to the LLM verbatim so it can fix-and-retry.
+        try {
+          final diagnostics = await Monty.typeCheck(code);
+          if (diagnostics.isNotEmpty) {
+            final summary = diagnostics
+                .take(3)
+                .map((d) => '${d.line}:${d.column} ${d.code}: ${d.message}')
+                .join('\n');
+            _appendChatLog('error', '[typeCheck rejected]\n$summary');
+            return 'Error (pre-flight typeCheck failed):\n$summary\n'
+                'Fix these and call run_python again.';
+          }
+        } catch (_) {/* typeCheck unavailable / failed — fall through to execute */}
+
         final result = await agentSession.execute(code).result;
 
         if (result.error != null) {
@@ -798,6 +856,17 @@ else:
       return;
     }
 
+    // Subscribe to the runtime's broadcast event stream so any
+    // BridgeFunctionEmit from a host function (e.g. the summarize
+    // pipeline) becomes a visible 'sys' line in the chat. Wired up
+    // BEFORE the execute call below; cancelled in finally.
+    final emitSub = agent.events.listen((event) {
+      if (event is BridgeFunctionEmit && event.text.isNotEmpty) {
+        _appendChatLog('sys', event.text);
+      }
+    });
+
+    try {
     switch (cmd) {
       case '/help':
         _appendChatLog(
@@ -892,6 +961,9 @@ else:
           'sys',
           'unknown slash command: $cmd (try /help)',
         );
+    }
+    } finally {
+      await emitSub.cancel();
     }
   }
 

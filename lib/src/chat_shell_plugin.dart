@@ -194,7 +194,14 @@ class ChatShellPlugin extends MontyExtension {
     HostContext ctx,
   ) async {
     final style = (args['style'] as String?) ?? 'bullets';
-    final result = await _pipeline.runFromChatSession(_shell(), style: style);
+    final result = await _pipeline.runFromChatSession(
+      _shell(),
+      style: style,
+      // Forward each pipeline-stage status string into the bridge event
+      // stream as a BridgeFunctionEmit. Subscribers to MontyRuntime.events
+      // (e.g. a UI progress bar / status line) see them in real time.
+      onProgress: (msg) => ctx.emitText('[summarize_v2] $msg'),
+    );
     return result.summary;
   }
 

@@ -139,7 +139,11 @@ class ChatSummarizePipeline {
     required this.engineRef,
     this.windowSize = 4,
     this.oneShotThreshold = 12,
-    this.maxPatchAttempts = 2,
+    // 1 patch attempt (down from 2). The 2B model often regresses on
+    // long patch prompts ("the issue with this summary is…"), and the
+    // deterministic fact-table fallback is faithful and fast — better
+    // to fall back than to keep nagging the model.
+    this.maxPatchAttempts = 1,
   });
 
   /// Engine to drive every LLM call. All calls go through `engineRef` so
@@ -180,25 +184,37 @@ class ChatSummarizePipeline {
   Future<SummaryResult> runFromChatSession(
     ChatSession session, {
     String style = 'bullets',
+    void Function(String)? onProgress,
   }) =>
-      run(ChatSessionSource(session), style: style);
+      run(ChatSessionSource(session), style: style, onProgress: onProgress);
 
   /// Convenience: build an [AgUiEventsSource] and run.
   Future<SummaryResult> runFromAgUiEvents(
     List<Map<String, Object?>> events, {
     bool includeThinking = false,
     String style = 'bullets',
+    void Function(String)? onProgress,
   }) =>
       run(
         AgUiEventsSource(events, includeThinking: includeThinking),
         style: style,
+        onProgress: onProgress,
       );
 
   /// Runs the pipeline over [source]. Use [ChatSessionSource] for the
   /// outer chat shell or [AgUiEventsSource] for an agentic stream. The
   /// source is not modified — the caller decides whether to apply the
   /// result via e.g. `chat_reset(seed=…)`.
-  Future<SummaryResult> run(SummarizableSource source, {String style = 'bullets'}) async {
+  ///
+  /// [onProgress] receives a short status string at each pipeline stage
+  /// (`extract i/n`, `merged N facts`, `render`, `validate`, `patch`,
+  /// `fallback`). Use it to drive a UI progress bar / status bar.
+  Future<SummaryResult> run(
+    SummarizableSource source, {
+    String style = 'bullets',
+    void Function(String)? onProgress,
+  }) async {
+    void p(String s) => onProgress?.call(s);
     final msgs = source.turns;
     if (msgs.isEmpty) {
       return const SummaryResult(
@@ -212,7 +228,9 @@ class ChatSummarizePipeline {
       );
     }
 
+    p('start: ${msgs.length} turns, threshold=$oneShotThreshold');
     if (msgs.length < oneShotThreshold) {
+      p('one-shot path (short conversation)');
       final summary = await _oneShot(msgs, style);
       return SummaryResult(
         summary: summary,
@@ -233,17 +251,22 @@ class ChatSummarizePipeline {
     final decisions = <String>[];
     final openQuestions = <String>[];
 
+    final totalChunks = ((msgs.length + windowSize - 1) / windowSize).ceil();
     for (var i = 0; i < msgs.length; i += windowSize) {
       final end = (i + windowSize).clamp(0, msgs.length);
       final chunk = msgs.sublist(i, end);
+      final wIdx = (i ~/ windowSize) + 1;
+      p('extract $wIdx/$totalChunks (turns $i..${end - 1})');
       final extraction = await _extractWindow(chunk, baseTurn: i);
       calls++;
       if (extraction == null) {
+        p('extract $wIdx/$totalChunks parse_fail — retrying');
         // One retry on parse failure.
         final retry = await _extractWindow(chunk, baseTurn: i);
         calls++;
         if (retry == null) {
           issues.add('extract.parse_fail.window_$i');
+          p('extract $wIdx/$totalChunks giving up — skipping window');
           continue;
         }
         _merge(retry, factMap, decisions, openQuestions);
@@ -253,15 +276,20 @@ class ChatSummarizePipeline {
     }
 
     final facts = factMap.values.toList();
+    p('merged: ${facts.length} unique facts, ${decisions.length} decisions, '
+        '${openQuestions.length} open questions');
 
     // ---- Step 3: render to prose -------------------------------------------
+    p('render → prose');
     var prose = await _render(facts, decisions, openQuestions, style);
     calls++;
 
     // ---- Step 4+5: validate + repair ---------------------------------------
     for (var attempt = 0; attempt <= maxPatchAttempts; attempt++) {
+      p('validate (attempt ${attempt + 1}/${maxPatchAttempts + 1})');
       final problems = _validate(prose, facts);
       if (problems.isEmpty) {
+        p('valid — done');
         return SummaryResult(
           summary: prose,
           facts: facts,
@@ -273,12 +301,17 @@ class ChatSummarizePipeline {
         );
       }
       issues.addAll(problems);
-      if (attempt == maxPatchAttempts) break;
+      if (attempt == maxPatchAttempts) {
+        p('validate failed after $attempt patches — falling back');
+        break;
+      }
+      p('patch (${problems.length} issues)');
       prose = await _patch(prose, problems, facts);
       calls++;
     }
 
     // ---- Fallback: deterministic fact-table rendering ----------------------
+    p('fallback: deterministic fact-table render');
     return SummaryResult(
       summary: _fallback(facts, decisions, openQuestions),
       facts: facts,
@@ -466,6 +499,15 @@ class ChatSummarizePipeline {
     return issues;
   }
 
+  /// Detects 2B-model meta-commentary patterns ("the issue is…", "to fix
+  /// this we should…", "I cannot…") that mean the model analysed the prompt
+  /// instead of rewriting. Treat as patch failure → fallback.
+  static final _metaCommentaryRe = RegExp(
+    r"^\s*(the issue|the summary lacks|to fix this|we (need|should)|"
+    r"i (cannot|am unable|do not|don't)|here's what)",
+    caseSensitive: false,
+  );
+
   Future<String> _patch(
     String prose,
     List<String> issues,
@@ -474,36 +516,39 @@ class ChatSummarizePipeline {
     final missing = issues
         .where((i) => i.startsWith('missing:'))
         .map((i) => i.substring('missing:'.length))
+        .toSet()
         .toList();
     final inverted = issues
         .where((i) => i.startsWith('polarity:'))
         .map((i) => i.substring('polarity:'.length))
+        .toSet()
         .toList();
-    final note = StringBuffer();
-    if (missing.isNotEmpty) {
-      note.writeln('- These subjects are missing: ${missing.join(', ')}.');
-    }
-    if (inverted.isNotEmpty) {
-      note.writeln(
-          '- These subjects must be NEGATED (use "not"/"never"): ${inverted.join(', ')}.');
-    }
-    if (issues.contains('refusal')) {
-      note.writeln('- Do not say "I don\'t know" — write the summary based on the facts you were given.');
-    }
-    return engineRef.complete([
+    final addList = <String>[
+      ...missing.map((s) => 'mention "$s"'),
+      ...inverted.map((s) => 'mention "$s" with the word NOT before it'),
+    ];
+
+    // Keep the patch prompt small, directive, and free of meta-language.
+    // Earlier we passed "ISSUES TO FIX" + "AVAILABLE FACTS" and the 2B
+    // model confused itself into writing analysis instead of a rewrite.
+    final patched = await engineRef.complete([
       LlamaChatMessage.fromText(
         role: LlamaChatRole.system,
-        text:
-            'Rewrite the summary so that every required fact is present and '
-            'every negation is preserved. Keep it concise. Reply with the '
-            'rewritten summary only.',
+        text: 'Output ONLY the rewritten summary. No preamble, no '
+            'explanation, no meta-commentary. Bullet list, plain text.',
       ),
       LlamaChatMessage.fromText(
         role: LlamaChatRole.user,
-        text: 'CURRENT SUMMARY:\n$prose\n\nISSUES TO FIX:\n$note\n'
-            'AVAILABLE FACTS:\n${jsonEncode(facts.map((f) => f.toJson()).toList())}',
+        text: 'Rewrite this summary, also covering: '
+            '${addList.join('; ')}.\n\n$prose',
       ),
     ]);
+
+    // Reject obvious meta-commentary so the caller falls back deterministic.
+    if (_metaCommentaryRe.hasMatch(patched)) {
+      return prose; // unchanged → next validation will fail again → fallback
+    }
+    return patched;
   }
 
   String _fallback(
