@@ -20,19 +20,32 @@ const _nativeModelPath =
     '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
-Answer with ONE python markdown fence. The host runs it and feeds you
-the printed output.
+DECOMPOSE every task into the smallest python program that produces
+useful new information. Run it, READ the printed output, then write
+the NEXT small program using what you just learned. Variables and
+imports persist across turns.
 
+Each turn: ONE small fence. Print the value(s) you want to inspect
+next. DO NOT try to write the whole solution in a single fence —
+that's how mistakes hide and the program fails after a long run.
+
+Example flow for "what's in /fixtures/sample.csv?":
+  turn 1 — peek:
 ```python
-print('hi')
+from pathlib import Path
+data = Path('/fixtures/sample.csv').read_text().splitlines()
+print(len(data), 'rows')
+print('header:', data[0])
+print('first row:', data[1])
 ```
+  turn 2 — react to what you saw, do ONE more thing.
 
 Files at /fixtures/: welcome.md, sample.csv (name,quantity,price),
-notes.txt. Use pathlib: `Path('/fixtures/x').read_text()`.
+notes.txt.
 
 Monty subset: no class / yield / with / decorators / .format() / %
 formatting / del. Allowed modules: math, re, json, datetime, pathlib.
-Use `round(x, 2)` and f-strings (no method calls inside braces).
+Use `round(x, 2)` and simple f-strings (no method calls inside braces).
 Every if/for/while/def header ends with `:`.
 ''';
 
@@ -589,6 +602,15 @@ else:
 
     try {
       var parts = <LlamaContentPart>[LlamaTextContent(msg)];
+      // Iterative-decomposition cap: the LLM writes a fence, host runs
+      // it, result is fed back, LLM writes the next fence, etc. We stop
+      // when the LLM emits no fence (just prose) OR when the
+      // accumulated context-token budget exceeds [maxContextTokens]. A
+      // hard turn cap guards against an infinite loop on a confused
+      // model.
+      const maxContextTokens = 6000;
+      const hardTurnCap = 12;
+      var fenceTurns = 0;
       var toolRetries = 0;
       const maxToolRetries = 3;
       var errorNudgeCount = 0;
@@ -754,7 +776,31 @@ else:
               ];
               continue;
             }
-            break;
+            // Success: keep looping so the LLM can react to the output
+            // and decompose the task into the next small step. Stops
+            // when the LLM emits no fence (just prose) OR when the
+            // context-token budget is exhausted.
+            fenceTurns++;
+            await _updateContextTokens();
+            if (_contextTokens >= maxContextTokens) {
+              _appendChatLog(
+                'sys',
+                'Stopping iteration: context at $_contextTokens '
+                'tokens (cap $maxContextTokens). Type something to '
+                'continue, or /compress to summarize and reset.',
+              );
+              break;
+            }
+            if (fenceTurns >= hardTurnCap) {
+              _appendChatLog(
+                'sys',
+                'Stopping iteration: hit hard $hardTurnCap-step cap. '
+                'Type "continue" to keep going.',
+              );
+              break;
+            }
+            parts = [];
+            continue;
           }
 
           if (text.isNotEmpty) _appendChatLog('assistant', text);
