@@ -99,7 +99,8 @@ String? _extractCode(String reply) {
   // Raw Python heuristic — used by the web demo too.
   final cleaned = reply.trim();
   if (cleaned.isEmpty) return null;
-  if (RegExp(r'(^|\n)\s*(print\s*\(|def\s+\w|import\s+\w|from\s+\w|for\s+\w|while\s+|if\s+|return\s+|[a-zA-Z_]\w*\s*=)')
+  if (RegExp(
+          r'(^|\n)\s*(print\s*\(|def\s+\w|import\s+\w|from\s+\w|for\s+\w|while\s+|if\s+|return\s+|[a-zA-Z_]\w*\s*=)')
       .hasMatch(cleaned)) {
     return cleaned;
   }
@@ -114,8 +115,7 @@ Future<({String code, String reply})> _llmCode(
   final note = extraNote == null ? '' : '\n\n$extraNote';
   final session = ChatSession(ref.engine, systemPrompt: _systemPrompt);
   final buf = StringBuffer();
-  await for (final c
-      in session.create([LlamaTextContent('$task$note')])) {
+  await for (final c in session.create([LlamaTextContent('$task$note')])) {
     final s = c.choices.firstOrNull?.delta.content;
     if (s != null) buf.write(s);
   }
@@ -177,8 +177,8 @@ Future<void> _runTask(
       lastErr =
           'your except-clause printed: ${out.substring(caught.start, (caught.start + 200).clamp(0, out.length))}';
       stdout.writeln('\n  ✗ Caught-but-printed error in stdout: $lastErr');
-      stdout.writeln(
-          '  → asking LLM to retry without swallowing the exception');
+      stdout
+          .writeln('  → asking LLM to retry without swallowing the exception');
       continue;
     }
     final ret = result.value is MontyNone
@@ -197,7 +197,8 @@ Future<void> _runTask(
 Future<void> main() async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
   final ref = LlamaEngineRef(engine);
 
   final monty = MontyRuntime(

@@ -19,7 +19,8 @@ const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 Future<void> main() async {
   final engine = LlamaEngine(LlamaBackend());
   stdout.writeln('Loading model …');
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 4096));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 4096));
   stdout.writeln('Loaded.\n');
 
   final engineRef = LlamaEngineRef(engine);
@@ -33,14 +34,12 @@ Future<void> main() async {
     // Use raw engineRef so it queues behind any leaked stream still
     // holding the lock — and time it out so we don't hang forever.
     try {
-      final reply = await engineRef
-          .complete([
-            LlamaChatMessage.fromText(
-              role: LlamaChatRole.user,
-              text: 'Reply with: OK',
-            ),
-          ])
-          .timeout(const Duration(seconds: 30));
+      final reply = await engineRef.complete([
+        LlamaChatMessage.fromText(
+          role: LlamaChatRole.user,
+          text: 'Reply with: OK',
+        ),
+      ]).timeout(const Duration(seconds: 30));
       return reply.trim().toUpperCase().contains('OK');
     } catch (e) {
       stdout.writeln('  health check failed: $e');
@@ -61,8 +60,7 @@ Future<void> main() async {
       stdout.writeln('  py.error:  ${result.error!.message}');
     }
     final delta = afterCount - beforeCount;
-    final newIds =
-        afterIds.where((id) => !beforeIds.contains(id)).toList();
+    final newIds = afterIds.where((id) => !beforeIds.contains(id)).toList();
     final tag = delta > 0 ? 'LEAK' : 'CLEAN';
     stdout.writeln('  handles: before=$beforeCount after=$afterCount '
         'delta=$delta newlyLeaked=$newIds [$tag]');
@@ -174,7 +172,8 @@ else:
 ''';
   final j = await monty.execute(journalScript).result;
   stdout.write(j.printOutput ?? '');
-  if (j.error != null) stdout.writeln('journal read error: ${j.error!.message}');
+  if (j.error != null)
+    stdout.writeln('journal read error: ${j.error!.message}');
 
   await monty.dispose();
   await engine.dispose();

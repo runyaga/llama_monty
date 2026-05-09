@@ -16,8 +16,7 @@ import 'package:llamadart/llamadart.dart';
 
 const _modelUrl = 'models/gemma-4-E2B-it-Q4_K_M.gguf';
 
-const _nativeModelPath =
-    '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
+const _nativeModelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
 You DO have a working filesystem and a working Python interpreter. The
@@ -78,42 +77,8 @@ error and ask for a corrected fence; rewrite the program using
 pathlib instead of apologizing.
 ''';
 
-const _systemPrompt = '''
-You are a helpful AI assistant with access to a Python interpreter via the run_python tool. Use it whenever you need to compute, process data, or run code. Python state persists across calls — variables defined in one call are available in the next.
-
-## Monty Python sandbox — key restrictions
-
-run_python executes inside Monty, a restricted Python subset. Avoid these or your code will fail:
-
-- NO class keyword — use dicts for structured data instead
-- NO yield / generators — use for loops and lists
-- NO match/case, del, or decorators (@property etc.)
-- NO hasattr(), callable(), format() builtins
-- NO collections, functools, itertools, numpy, pandas
-- NO chained assignment: write i = 0; j = 0 instead of i = j = 0
-- NO tuple unpacking in for-loop headers: instead of "for i, j in zip(a, b)" use indexing with a single loop variable
-
-Simple tuple unpacking in assignments is fine: a, b = 1, 2
-
-Supported modules: math, re, json, datetime
-
-## Error handling — retry loop
-
-If run_python returns an error:
-1. Read the error message carefully to identify the unsupported feature
-2. Rewrite the code to avoid it (e.g. replace tuple-unpacking for-loops with index loops)
-3. Call run_python again with the corrected code
-
-DO NOT wrap calls in try/except just to print the error. Let errors
-surface so the system can hand them back to you and you can fix the
-program. Apologizing about "sandbox limitations" is wrong — rewrite
-the code using the supported features and call run_python again.
-
-Never report output or results you did not actually receive from the tool.
-''';
-
 // ---------------------------------------------------------------------------
-// Seed fixtures (web only — MemoryFileSystem starts empty)
+// Seed fixtures (writable on both web MemFS and macOS /tmp)
 // ---------------------------------------------------------------------------
 
 const _fixtureWelcome = '''
@@ -191,18 +156,22 @@ class _ConsoleBridgeLogger implements BridgeLogger {
       print('[$_prefix:INFO] $msg');
 
   @override
-  void warning(String msg,
-      {Object? error,
-      StackTrace? stackTrace,
-      Map<String, Object?>? attributes}) =>
+  void warning(
+    String msg, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object?>? attributes,
+  }) =>
       // ignore: avoid_print
       print('[$_prefix:WARN] $msg${error != null ? ' — $error' : ''}');
 
   @override
-  void error(String msg,
-      {Object? error,
-      StackTrace? stackTrace,
-      Map<String, Object?>? attributes}) =>
+  void error(
+    String msg, {
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object?>? attributes,
+  }) =>
       // ignore: avoid_print
       print(
         '[$_prefix:ERROR] $msg${error != null ? ' — $error' : ''}'
@@ -280,8 +249,8 @@ class _ChatPageState extends State<ChatPage> {
   // Gemma 4's special-token tool format that whereType<LlamaToolCallContent>
   // sometimes misses).
   ChatFormat? _detectedChatFormat;
-  MontyRuntime? _agentSession;   // used by run_python tool in chat
-  MontyRuntime? _replRuntime;    // used by Python REPL; has LlamaMontyPlugin
+  MontyRuntime? _agentSession; // used by run_python tool in chat
+  MontyRuntime? _replRuntime; // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
 
   double? _loadProgress;
@@ -305,7 +274,8 @@ class _ChatPageState extends State<ChatPage> {
   static const _experiments = <({String name, String description, List<String> prompts})>[
     (
       name: 'Context Cliff',
-      description: 'Many short tasks — finds the token count where model stops calling tools',
+      description:
+          'Many short tasks — finds the token count where model stops calling tools',
       prompts: [
         'Compute 17 * 23 * 41 in Python and print the result',
         'Print the sum of all odd numbers from 1 to 99',
@@ -326,7 +296,8 @@ class _ChatPageState extends State<ChatPage> {
     ),
     (
       name: 'Logic Gauntlet',
-      description: 'Complex multi-step problems — tests how sophisticated the reasoning gets',
+      description:
+          'Complex multi-step problems — tests how sophisticated the reasoning gets',
       prompts: [
         'Implement bubble sort. Sort [64,34,25,12,22,11,90] and count the exact number of swaps made',
         'Find all Pythagorean triples (a,b,c) where a<b<c and a+b+c<=120 — print each triple and the total count',
@@ -342,7 +313,8 @@ class _ChatPageState extends State<ChatPage> {
     ),
     (
       name: 'Wild Card',
-      description: 'Fun & surprising — simulations, patterns, recreational math',
+      description:
+          'Fun & surprising — simulations, patterns, recreational math',
       prompts: [
         'Simulate the Monty Hall problem 10000 times — print win rates for "always switch" vs "never switch"',
         'Find all happy numbers between 1 and 100 (sum squares of digits repeatedly until 1 or cycle) — print them',
@@ -403,7 +375,9 @@ class _ChatPageState extends State<ChatPage> {
     for (var idx = 0; idx < exp.prompts.length; idx++) {
       _inputCtrl.text = exp.prompts[idx];
       // ignore: avoid_print
-      print('[experiment:${exp.name}] prompt ${idx + 1}/${exp.prompts.length}: ${exp.prompts[idx]}');
+      print(
+        '[experiment:${exp.name}] prompt ${idx + 1}/${exp.prompts.length}: ${exp.prompts[idx]}',
+      );
       await _send();
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
@@ -474,7 +448,9 @@ class _ChatPageState extends State<ChatPage> {
         // ignore: avoid_print
         print('[app] detected chat format: $_detectedChatFormat');
       }
-    } catch (_) {/* best-effort */}
+    } catch (_) {
+      /* best-effort */
+    }
 
     // Engine ref serialises concurrent LLM calls from chat + REPL +
     // recursive llm_complete invocations from inside run_python.
@@ -605,7 +581,10 @@ class _ChatPageState extends State<ChatPage> {
       },
     );
 
-    final chatSession = ChatSession(engine, systemPrompt: _systemPromptCtrl.text);
+    final chatSession = ChatSession(
+      engine,
+      systemPrompt: _systemPromptCtrl.text,
+    );
 
     // ignore: avoid_print
     print('[app] model loaded — starting chat + REPL sessions');
@@ -625,8 +604,8 @@ class _ChatPageState extends State<ChatPage> {
     _appendChatLog(
       'sys',
       'Model loaded. Python runtime ready.\n'
-      'The LLM can execute Python via run_python — state persists across calls.\n\n'
-      'Slash commands:  /help  /summarize  /compress  /reset  /history  /files',
+          'The LLM can execute Python via run_python — state persists across calls.\n\n'
+          'Slash commands:  /help  /summarize  /compress  /reset  /history  /files',
     );
 
     // Also show what's in the seeded /tmp/fixtures/ directory so the user
@@ -650,20 +629,22 @@ else:
           _appendChatLog(
             'sys',
             '/tmp/fixtures contents:\n$listing\n\n'
-            'Try: "read welcome.md", "what\'s the average price in '
-            'sample.csv", or "summarize notes.txt".',
+                'Try: "read welcome.md", "what\'s the average price in '
+                'sample.csv", or "summarize notes.txt".',
           );
         }
-      } catch (_) {/* fixture listing is best-effort */}
+      } catch (_) {
+        /* fixture listing is best-effort */
+      }
     }
 
     _appendReplLog(
       'sys',
       'LLM functions available in this REPL:\n'
-      '  llm_complete(prompt, system_prompt=None) → str\n'
-      '  llm_chat(message, system_prompt=None) → str\n'
-      '  llm_chat_reset(keep_system_prompt=True) → None\n\n'
-      'State persists across runs.',
+          '  llm_complete(prompt, system_prompt=None) → str\n'
+          '  llm_chat(message, system_prompt=None) → str\n'
+          '  llm_chat_reset(keep_system_prompt=True) → None\n\n'
+          'State persists across runs.',
     );
   }
 
@@ -795,37 +776,49 @@ else:
               toolCallParts = parsed.toolCalls
                   .where((tc) => (tc.function?.name?.trim() ?? '').isNotEmpty)
                   .map((tc) {
-                Map<String, Object?> args = const {};
-                final raw = tc.function?.arguments;
-                if (raw != null && raw.trim().isNotEmpty) {
-                  try {
-                    final decoded = jsonDecode(raw);
-                    if (decoded is Map<String, Object?>) args = decoded;
-                  } catch (_) {/* leave empty */}
-                }
-                return LlamaToolCallContent(
-                  id: tc.id,
-                  name: tc.function!.name!.trim(),
-                  arguments: args,
-                  rawJson: jsonEncode(<String, Object?>{
-                    'name': tc.function!.name!.trim(),
-                    'arguments': args,
-                  }),
-                );
-              }).toList();
+                    Map<String, Object?> args = const {};
+                    final raw = tc.function?.arguments;
+                    if (raw != null && raw.trim().isNotEmpty) {
+                      try {
+                        final decoded = jsonDecode(raw);
+                        if (decoded is Map<String, Object?>) args = decoded;
+                      } catch (_) {
+                        /* leave empty */
+                      }
+                    }
+                    return LlamaToolCallContent(
+                      id: tc.id,
+                      name: tc.function!.name!.trim(),
+                      arguments: args,
+                      rawJson: jsonEncode(<String, Object?>{
+                        'name': tc.function!.name!.trim(),
+                        'arguments': args,
+                      }),
+                    );
+                  })
+                  .toList();
               // ignore: avoid_print
-              print('[app] fallback parser recovered '
-                  '${toolCallParts.length} tool call(s)');
+              print(
+                '[app] fallback parser recovered '
+                '${toolCallParts.length} tool call(s)',
+              );
             }
-          } catch (_) {/* parse failures fall through */}
+          } catch (_) {
+            /* parse failures fall through */
+          }
         }
 
         // ignore: avoid_print
-        print('[app] finishReason=$finishReason toolCalls=${toolCallParts.length}');
+        print(
+          '[app] finishReason=$finishReason toolCalls=${toolCallParts.length}',
+        );
 
         if (finishReason == 'tool_calls' && toolCallParts.isNotEmpty) {
           if (toolRetries >= maxToolRetries) {
-            _appendChatLog('sys', 'Max tool retries ($maxToolRetries) reached — stopping.');
+            _appendChatLog(
+              'sys',
+              'Max tool retries ($maxToolRetries) reached — stopping.',
+            );
             break;
           }
 
@@ -834,11 +827,7 @@ else:
             String resultStr;
             final effectiveArgs = tc.arguments.isNotEmpty
                 ? tc.arguments
-                : _extractGemma4SingleStringArg(
-                    rawContent,
-                    tc.name,
-                    'code',
-                  );
+                : _extractGemma4SingleStringArg(rawContent, tc.name, 'code');
 
             if (effectiveArgs.isEmpty) {
               toolRetries++;
@@ -849,7 +838,10 @@ else:
                   'Error: tool call for "${tc.name}" was received with no '
                   'arguments. Please call ${tc.name} again and include all '
                   'required parameters (e.g. the "code" string).';
-              _appendChatLog('sys', 'tool=${tc.name} args missing — retry $toolRetries/$maxToolRetries');
+              _appendChatLog(
+                'sys',
+                'tool=${tc.name} args missing — retry $toolRetries/$maxToolRetries',
+              );
             } else {
               toolRetries = 0;
               // Show a distinct "tool call" entry so it's easy to spot.
@@ -888,7 +880,9 @@ else:
               'LLM skipped retry after error — nudging ($errorNudgeCount/$maxErrorNudges)',
             );
             // ignore: avoid_print
-            print('[app] nudging LLM to retry after error ($errorNudgeCount/$maxErrorNudges)');
+            print(
+              '[app] nudging LLM to retry after error ($errorNudgeCount/$maxErrorNudges)',
+            );
             parts = [
               LlamaTextContent(
                 'You received a Python error from the tool. '
@@ -898,7 +892,8 @@ else:
             continue;
           }
 
-          var text = lastMsg?.parts
+          var text =
+              lastMsg?.parts
                   .whereType<LlamaTextContent>()
                   .map((p) => p.text)
                   .join() ??
@@ -923,8 +918,9 @@ else:
             String resultStr;
             try {
               resultStr =
-                  await _runPythonTool!.invoke({'code': fenceCode}) as String? ??
-                      '(no output)';
+                  await _runPythonTool!.invoke({'code': fenceCode})
+                      as String? ??
+                  '(no output)';
             } catch (e) {
               resultStr = 'Error: $e';
               _appendChatLog('error', resultStr);
@@ -934,17 +930,15 @@ else:
             // like a swallowed exception (e.g. `try: ... except: print('an
             // error occurred:', e)`). Treat both as failures so the retry
             // nudge fires and the LLM gets a pointed rewrite hint.
-            final fenceFailed = resultStr.startsWith('Error:') ||
+            final fenceFailed =
+                resultStr.startsWith('Error:') ||
                 _looksLikeSwallowedError(resultStr);
             // Feed the tool result back so the model can react.
             _chatSession!.addMessage(
               LlamaChatMessage.withContent(
                 role: LlamaChatRole.tool,
                 content: [
-                  LlamaToolResultContent(
-                    name: 'run_python',
-                    result: resultStr,
-                  ),
+                  LlamaToolResultContent(name: 'run_python', result: resultStr),
                 ],
               ),
             );
@@ -954,7 +948,7 @@ else:
               _appendChatLog(
                 'sys',
                 'Code failed — asking LLM to fix and retry '
-                '($errorNudgeCount/$maxErrorNudges)',
+                    '($errorNudgeCount/$maxErrorNudges)',
               );
               parts = [
                 LlamaTextContent(
@@ -973,8 +967,8 @@ else:
               _appendChatLog(
                 'sys',
                 'Stopping iteration: context at $_contextTokens '
-                'tokens (cap $maxContextTokens). Type something to '
-                'continue, or /compress to summarize and reset.',
+                    'tokens (cap $maxContextTokens). Type something to '
+                    'continue, or /compress to summarize and reset.',
               );
               break;
             }
@@ -982,7 +976,7 @@ else:
               _appendChatLog(
                 'sys',
                 'Stopping iteration: hit hard $hardTurnCap-step cap. '
-                'Type "continue" to keep going.',
+                    'Type "continue" to keep going.',
               );
               break;
             }
@@ -1031,79 +1025,77 @@ else:
     });
 
     try {
-    switch (cmd) {
-      case '/help':
-        _appendChatLog(
-          'sys',
-          'Slash commands:\n'
-          '  /summarize           run chat_summarize_v2 and print the result\n'
-          '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
-          '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
-          '  /history             dump the current chat_history()\n'
-          '  /files [path]        list files under /tmp/fixtures (or any path)\n'
-          '  /help                this list',
-        );
-      case '/summarize':
-        _appendChatLog('tool', 'chat_summarize_v2 (multi-step pipeline)');
-        final r = await agent
-            .execute('print(chat_summarize_v2())')
-            .result;
-        if (r.error != null) {
-          _appendChatLog('error', r.error!.message);
-        } else {
-          _appendChatLog('assistant', (r.printOutput ?? '').trim());
-        }
-      case '/compress':
-        _appendChatLog('tool', 'chat_summarize_v2 → chat_reset(seed=…)');
-        final script = '''
+      switch (cmd) {
+        case '/help':
+          _appendChatLog(
+            'sys',
+            'Slash commands:\n'
+                '  /summarize           run chat_summarize_v2 and print the result\n'
+                '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
+                '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
+                '  /history             dump the current chat_history()\n'
+                '  /files [path]        list files under /tmp/fixtures (or any path)\n'
+                '  /help                this list',
+          );
+        case '/summarize':
+          _appendChatLog('tool', 'chat_summarize_v2 (multi-step pipeline)');
+          final r = await agent.execute('print(chat_summarize_v2())').result;
+          if (r.error != null) {
+            _appendChatLog('error', r.error!.message);
+          } else {
+            _appendChatLog('assistant', (r.printOutput ?? '').trim());
+          }
+        case '/compress':
+          _appendChatLog('tool', 'chat_summarize_v2 → chat_reset(seed=…)');
+          final script = '''
 summary = chat_summarize_v2()
 print('--- summary ---')
 print(summary)
 chat_reset(keep_system_prompt=True, seed='Earlier in this conversation: ' + summary)
 print('--- chat reset, seeded with summary ---')
 ''';
-        final r = await agent.execute(script).result;
-        if (r.error != null) {
-          _appendChatLog('error', r.error!.message);
-        } else {
-          _appendChatLog('output', (r.printOutput ?? '').trim());
-          // Also force the chat session to re-pick-up the new state by
-          // reloading the field — chat_reset operates on _chatSession
-          // directly via the ChatShellPlugin, so no further wiring needed.
-          setState(() {});
-        }
-      case '/reset':
-        // Optional argument is a seed string (everything after /reset).
-        final seedArg = argText.isEmpty
-            ? 'None'
-            : "'''${argText.replaceAll(r'\', r'\\').replaceAll("'''", r"\'\'\'")}'''";
-        _appendChatLog('tool', 'chat_reset(seed=$seedArg)');
-        final r = await agent
-            .execute(
-              'chat_reset(keep_system_prompt=True, seed=$seedArg)\n'
-              "print('chat reset')",
-            )
-            .result;
-        if (r.error != null) {
-          _appendChatLog('error', r.error!.message);
-        } else {
-          _appendChatLog('sys', (r.printOutput ?? 'reset').trim());
-          setState(() {});
-        }
-      case '/history':
-        _appendChatLog('tool', 'chat_history()');
-        final r = await agent.execute('print(chat_history())').result;
-        if (r.error != null) {
-          _appendChatLog('error', r.error!.message);
-        } else {
-          _appendChatLog('output', (r.printOutput ?? '').trim());
-        }
-      case '/files':
-        // List anything under /tmp/fixtures/ — the seed dir on web. Argument
-        // (if any) is treated as a different root.
-        final root = argText.isEmpty ? '/tmp/fixtures' : argText;
-        _appendChatLog('tool', "list($root)");
-        final r = await agent.execute('''
+          final r = await agent.execute(script).result;
+          if (r.error != null) {
+            _appendChatLog('error', r.error!.message);
+          } else {
+            _appendChatLog('output', (r.printOutput ?? '').trim());
+            // Also force the chat session to re-pick-up the new state by
+            // reloading the field — chat_reset operates on _chatSession
+            // directly via the ChatShellPlugin, so no further wiring needed.
+            setState(() {});
+          }
+        case '/reset':
+          // Optional argument is a seed string (everything after /reset).
+          final seedArg = argText.isEmpty
+              ? 'None'
+              : "'''${argText.replaceAll(r'\', r'\\').replaceAll("'''", r"\'\'\'")}'''";
+          _appendChatLog('tool', 'chat_reset(seed=$seedArg)');
+          final r = await agent
+              .execute(
+                'chat_reset(keep_system_prompt=True, seed=$seedArg)\n'
+                "print('chat reset')",
+              )
+              .result;
+          if (r.error != null) {
+            _appendChatLog('error', r.error!.message);
+          } else {
+            _appendChatLog('sys', (r.printOutput ?? 'reset').trim());
+            setState(() {});
+          }
+        case '/history':
+          _appendChatLog('tool', 'chat_history()');
+          final r = await agent.execute('print(chat_history())').result;
+          if (r.error != null) {
+            _appendChatLog('error', r.error!.message);
+          } else {
+            _appendChatLog('output', (r.printOutput ?? '').trim());
+          }
+        case '/files':
+          // List anything under /tmp/fixtures/ — the seed dir on web. Argument
+          // (if any) is treated as a different root.
+          final root = argText.isEmpty ? '/tmp/fixtures' : argText;
+          _appendChatLog('tool', "list($root)");
+          final r = await agent.execute('''
 from pathlib import Path
 p = Path('$root')
 if not p.exists():
@@ -1115,17 +1107,14 @@ else:
     else:
       print(entry.name + '/')
 ''').result;
-        if (r.error != null) {
-          _appendChatLog('error', r.error!.message);
-        } else {
-          _appendChatLog('output', (r.printOutput ?? '(empty)').trim());
-        }
-      default:
-        _appendChatLog(
-          'sys',
-          'unknown slash command: $cmd (try /help)',
-        );
-    }
+          if (r.error != null) {
+            _appendChatLog('error', r.error!.message);
+          } else {
+            _appendChatLog('output', (r.printOutput ?? '(empty)').trim());
+          }
+        default:
+          _appendChatLog('sys', 'unknown slash command: $cmd (try /help)');
+      }
     } finally {
       await emitSub.cancel();
     }
@@ -1196,8 +1185,9 @@ else:
   ///  2. ```python or bare ``` fenced block (legacy / fallback)
   ///  3. Raw Python heuristic (text starts with print(/def /import / etc.)
   String? _extractPythonFence(String text) {
-    final fenced = RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```')
-        .firstMatch(text);
+    final fenced = RegExp(
+      r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```',
+    ).firstMatch(text);
     if (fenced != null) {
       final code = fenced.group(1)?.trim();
       if (code != null && code.isNotEmpty) {
@@ -1219,7 +1209,9 @@ else:
       return cleaned;
     }
     // ignore: avoid_print
-    print('[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 80 ? 80 : cleaned.length)}');
+    print(
+      '[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 80 ? 80 : cleaned.length)}',
+    );
     return null;
   }
 
@@ -1265,7 +1257,9 @@ else:
       RegExp(r'\ban error occurred\b'),
       RegExp(r'\btraceback\b'),
       RegExp(r'^\s*error\s*:', multiLine: true),
-      RegExp(r'\b(attribute|name|type|value|key|index|module|import|os|file)error\b'),
+      RegExp(
+        r'\b(attribute|name|type|value|key|index|module|import|os|file)error\b',
+      ),
       RegExp(r"\bmodule '[^']+' has no attribute\b"),
       RegExp(r'\bis not defined\b'),
       RegExp(r'\bno module named\b'),
@@ -1432,7 +1426,9 @@ else:
     if (keyPos == -1) keyPos = content.indexOf(unquotedKey);
     if (keyPos == -1) return {};
 
-    var i = keyPos + (content.contains(quotedKey) ? quotedKey.length : unquotedKey.length);
+    var i =
+        keyPos +
+        (content.contains(quotedKey) ? quotedKey.length : unquotedKey.length);
     while (i < content.length && content[i] != ':') i++;
     i++;
     while (i < content.length && (content[i] == ' ' || content[i] == '\t')) i++;
@@ -1445,12 +1441,18 @@ else:
       if (ch == '\\' && i + 1 < content.length) {
         final next = content[i + 1];
         switch (next) {
-          case 'n': value.write('\n');
-          case 'r': value.write('\r');
-          case 't': value.write('\t');
-          case '"': value.write('"');
-          case '\\': value.write('\\');
-          default: value.write(next);
+          case 'n':
+            value.write('\n');
+          case 'r':
+            value.write('\r');
+          case 't':
+            value.write('\t');
+          case '"':
+            value.write('"');
+          case '\\':
+            value.write('\\');
+          default:
+            value.write(next);
         }
         i += 2;
         continue;
@@ -1510,14 +1512,19 @@ else:
     if (_engine == null || _chatSession == null) return;
     final history = _chatSession!.history;
     if (history.isEmpty) return;
-    final allText = history.map((msg) {
-      return msg.parts.map((p) {
-        if (p is LlamaTextContent) return p.text;
-        if (p is LlamaToolCallContent) return p.arguments.toString();
-        if (p is LlamaToolResultContent) return p.result?.toString() ?? '';
-        return '';
-      }).join(' ');
-    }).join(' ');
+    final allText = history
+        .map((msg) {
+          return msg.parts
+              .map((p) {
+                if (p is LlamaTextContent) return p.text;
+                if (p is LlamaToolCallContent) return p.arguments.toString();
+                if (p is LlamaToolResultContent)
+                  return p.result?.toString() ?? '';
+                return '';
+              })
+              .join(' ');
+        })
+        .join(' ');
     try {
       final tokens = await _engine!.tokenize(allText, addSpecial: false);
       setState(() => _contextTokens = tokens.length);
@@ -1671,10 +1678,7 @@ else:
                         Expanded(
                           child: TabBarView(
                             physics: const NeverScrollableScrollPhysics(),
-                            children: [
-                              _replPanel(cs),
-                              _filesPanel(cs),
-                            ],
+                            children: [_replPanel(cs), _filesPanel(cs)],
                           ),
                         ),
                       ],
@@ -1753,7 +1757,9 @@ else:
               ),
             ),
           ),
-          onChanged: _busy ? null : (v) => setState(() => _selectedExperiment = v!),
+          onChanged: _busy
+              ? null
+              : (v) => setState(() => _selectedExperiment = v!),
         ),
         const SizedBox(width: 4),
         OutlinedButton(
@@ -1765,15 +1771,15 @@ else:
           onPressed: _busy
               ? null
               : () => setState(() {
-                    _chatLog.clear();
-                    _contextTokens = 0;
-                    if (_engine != null) {
-                      _chatSession = ChatSession(
-                        _engine!,
-                        systemPrompt: _systemPromptCtrl.text,
-                      );
-                    }
-                  }),
+                  _chatLog.clear();
+                  _contextTokens = 0;
+                  if (_engine != null) {
+                    _chatSession = ChatSession(
+                      _engine!,
+                      systemPrompt: _systemPromptCtrl.text,
+                    );
+                  }
+                }),
           child: const Text('Clear'),
         ),
       ],
@@ -1935,51 +1941,50 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                color: cs.surfaceContainerHigh,
-                child: Row(
-                  children: [
-                    const Icon(Icons.folder, size: 14),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Files',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '(${_filesEntries.where((e) => e.isFile).length} files)',
-                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-                    ),
-                    const Spacer(),
-                    if (_filesBusy)
-                      const SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed:
-                          ready && !_filesBusy ? _pickAndAddFiles : null,
-                      icon: const Icon(Icons.upload_file, size: 14),
-                      label: const Text('Add', style: TextStyle(fontSize: 11)),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        minimumSize: const Size(50, 24),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    TextButton(
-                      onPressed: ready && !_filesBusy ? _refreshFiles : null,
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(50, 24),
-                      ),
-                      child: const Text('Refresh', style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          color: cs.surfaceContainerHigh,
+          child: Row(
+            children: [
+              const Icon(Icons.folder, size: 14),
+              const SizedBox(width: 6),
+              const Text(
+                'Files',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '(${_filesEntries.where((e) => e.isFile).length} files)',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+              const Spacer(),
+              if (_filesBusy)
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: ready && !_filesBusy ? _pickAndAddFiles : null,
+                icon: const Icon(Icons.upload_file, size: 14),
+                label: const Text('Add', style: TextStyle(fontSize: 11)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(50, 24),
                 ),
               ),
+              const SizedBox(width: 4),
+              TextButton(
+                onPressed: ready && !_filesBusy ? _refreshFiles : null,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(50, 24),
+                ),
+                child: const Text('Refresh', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: _filesEntries.isEmpty
               ? Center(
@@ -2021,15 +2026,18 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
                       ),
                       subtitle: e.isFile
                           ? Text(
-                              e.size < 0 ? '(binary or unreadable)' : '${e.size} bytes',
+                              e.size < 0
+                                  ? '(binary or unreadable)'
+                                  : '${e.size} bytes',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: cs.onSurfaceVariant,
                               ),
                             )
                           : null,
-                      onTap:
-                          e.isFile && !_filesBusy ? () => _viewFile(e.path) : null,
+                      onTap: e.isFile && !_filesBusy
+                          ? () => _viewFile(e.path)
+                          : null,
                     );
                   },
                 ),
@@ -2045,7 +2053,10 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -2062,8 +2073,10 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
                       IconButton(
                         icon: const Icon(Icons.close, size: 14),
                         padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 24, minHeight: 24),
+                        constraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 24,
+                        ),
                         onPressed: () => setState(() {
                           _filesViewPath = null;
                           _filesViewContent = null;
@@ -2139,19 +2152,19 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
                   ),
                 )
               : _replLog.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Run some Python…',
-                        style: TextStyle(color: cs.onSurface.withAlpha(60)),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: _replScrollCtrl,
-                      padding: const EdgeInsets.all(8),
-                      itemCount: _replLog.length,
-                      itemBuilder: (ctx, i) =>
-                          _LogEntry(entry: _replLog[i], cs: cs),
-                    ),
+              ? Center(
+                  child: Text(
+                    'Run some Python…',
+                    style: TextStyle(color: cs.onSurface.withAlpha(60)),
+                  ),
+                )
+              : ListView.builder(
+                  controller: _replScrollCtrl,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _replLog.length,
+                  itemBuilder: (ctx, i) =>
+                      _LogEntry(entry: _replLog[i], cs: cs),
+                ),
         ),
         const Divider(height: 1),
         // Input
@@ -2168,7 +2181,8 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
                   maxLines: 4,
                   minLines: 2,
                   decoration: const InputDecoration(
-                    hintText: 'Python code…  (llm_complete / llm_chat available)',
+                    hintText:
+                        'Python code…  (llm_complete / llm_chat available)',
                     border: OutlineInputBorder(),
                     isDense: true,
                     contentPadding: EdgeInsets.all(8),
@@ -2206,7 +2220,11 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
 // ---------------------------------------------------------------------------
 
 class _FsEntry {
-  const _FsEntry({required this.path, required this.isFile, required this.size});
+  const _FsEntry({
+    required this.path,
+    required this.isFile,
+    required this.size,
+  });
   final String path;
   final bool isFile;
   final int size;
@@ -2224,13 +2242,17 @@ class _LogEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, bg) = switch (entry.kind) {
-      'user'      => ('YOU', cs.primary, cs.primaryContainer),
+      'user' => ('YOU', cs.primary, cs.primaryContainer),
       'assistant' => ('LLM', cs.secondary, cs.secondaryContainer),
-      'tool'      => ('CALL', Colors.amber.shade300, Colors.amber.shade900.withAlpha(80)),
-      'code'      => ('PY ', cs.tertiary, cs.tertiaryContainer),
-      'output'    => ('OUT', cs.tertiary, cs.tertiaryContainer.withAlpha(180)),
-      'error'     => ('ERR', cs.error, cs.errorContainer),
-      _           => ('SYS', cs.outline, cs.surfaceContainerHigh),
+      'tool' => (
+        'CALL',
+        Colors.amber.shade300,
+        Colors.amber.shade900.withAlpha(80),
+      ),
+      'code' => ('PY ', cs.tertiary, cs.tertiaryContainer),
+      'output' => ('OUT', cs.tertiary, cs.tertiaryContainer.withAlpha(180)),
+      'error' => ('ERR', cs.error, cs.errorContainer),
+      _ => ('SYS', cs.outline, cs.surfaceContainerHigh),
     };
 
     return Container(

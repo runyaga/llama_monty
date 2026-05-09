@@ -16,9 +16,8 @@ import 'package:llamadart/llamadart.dart';
 
 Future<void> main(List<String> args) async {
   final home = Platform.environment['HOME'] ?? '.';
-  final modelPath = args.isNotEmpty
-      ? args[0]
-      : '$home/models/gemma-4-E2B-it-Q4_K_M.gguf';
+  final modelPath =
+      args.isNotEmpty ? args[0] : '$home/models/gemma-4-E2B-it-Q4_K_M.gguf';
   final prompt = args.length > 1 ? args[1] : 'Say hello in one sentence.';
 
   if (!File(modelPath).existsSync()) {

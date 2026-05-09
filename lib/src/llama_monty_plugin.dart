@@ -82,7 +82,7 @@ class _StreamHandle {
 class LlamaMontyPlugin extends MontyExtension {
   /// Creates a [LlamaMontyPlugin] backed by [engineRef].
   LlamaMontyPlugin(this._engineRef)
-    : _chatSession = ChatSession(_engineRef.engine);
+      : _chatSession = ChatSession(_engineRef.engine);
 
   final LlamaEngineRef _engineRef;
   final ChatSession _chatSession;
@@ -112,13 +112,13 @@ class LlamaMontyPlugin extends MontyExtension {
 
   @override
   List<HostFunction> get functions => [
-    _llmCompleteFunction,
-    _llmChatFunction,
-    _llmChatResetFunction,
-    _llmStreamOpenFunction,
-    _llmStreamNextFunction,
-    _llmStreamCloseFunction,
-  ];
+        _llmCompleteFunction,
+        _llmChatFunction,
+        _llmChatResetFunction,
+        _llmStreamOpenFunction,
+        _llmStreamNextFunction,
+        _llmStreamCloseFunction,
+      ];
 
   // Open streams keyed by integer handle. Reused across the lifetime of
   // this plugin instance.
@@ -168,7 +168,8 @@ class LlamaMontyPlugin extends MontyExtension {
 
       String existing = '';
       try {
-        final r = await os('Path.read_text', [llamaMontyStreamsJournalPath], null);
+        final r =
+            await os('Path.read_text', [llamaMontyStreamsJournalPath], null);
         if (r is String) existing = r;
       } on OsCallFileNotFoundError {
         existing = '';
@@ -216,7 +217,8 @@ class LlamaMontyPlugin extends MontyExtension {
           name: 'system_prompt',
           type: HostParamType.string,
           isRequired: false,
-          description: 'Optional system instruction prepended before the prompt.',
+          description:
+              'Optional system instruction prepended before the prompt.',
         ),
       ],
     ),
@@ -477,8 +479,7 @@ class LlamaMontyPlugin extends MontyExtension {
     dispatch: DispatchMode.sync,
     schema: const HostFunctionSchema(
       name: 'llm_stream_close',
-      description:
-          'Release a stream handle. Safe to call after the stream has '
+      description: 'Release a stream handle. Safe to call after the stream has '
           'already drained — extra closes are no-ops.',
       params: [
         HostParam(

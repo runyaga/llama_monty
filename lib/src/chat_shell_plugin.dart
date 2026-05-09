@@ -147,8 +147,7 @@ class ChatShellPlugin extends MontyExtension {
     final messages = <LlamaChatMessage>[
       LlamaChatMessage.fromText(
         role: LlamaChatRole.system,
-        text:
-            'You compress conversations into a $style. Capture facts, open '
+        text: 'You compress conversations into a $style. Capture facts, open '
             'questions, decisions, and any state the next turn must remember. '
             'Keep it short — half the length of the input or less. Reply with '
             'the summary only, no preamble.',

@@ -62,8 +62,7 @@ D. Both True and False
   _Probe(
     id: 'T2',
     title: 'Agentic state-machine routing',
-    systemPrompt:
-        'Execute the rule logic precisely without skipping steps. '
+    systemPrompt: 'Execute the rule logic precisely without skipping steps. '
         '$_systemBoilerplate',
     userPrompt: '''
 A document processing system has 4 states: Raw, Chunked, Embedded, Agent_Review.
@@ -106,10 +105,9 @@ D. Replaced by C-FFI which provides equivalent functionality.
 /// Extract the FIRST 'Answer: X' style declaration. Tolerates surrounding
 /// markdown / parentheses / whitespace, plus the common '**Answer: B**' bold.
 String? _extractAnswer(String reply) {
-  final m = RegExp(
-          r'answer\s*[:\-=]\s*\**\s*\(?\s*([A-D])\b',
-          caseSensitive: false)
-      .firstMatch(reply);
+  final m =
+      RegExp(r'answer\s*[:\-=]\s*\**\s*\(?\s*([A-D])\b', caseSensitive: false)
+          .firstMatch(reply);
   return m?.group(1)?.toUpperCase();
 }
 
@@ -126,7 +124,8 @@ Future<String> _ask(LlamaEngine engine, _Probe p) async {
 Future<void> main(List<String> args) async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
 
   var passed = 0;
   var failed = 0;
@@ -143,9 +142,12 @@ Future<void> main(List<String> args) async {
         : picked == p.correct
             ? 'PASS'
             : 'FAIL';
-    if (tag == 'PASS') passed++;
-    else if (tag == 'FAIL') failed++;
-    else unparsable++;
+    if (tag == 'PASS')
+      passed++;
+    else if (tag == 'FAIL')
+      failed++;
+    else
+      unparsable++;
 
     // Print just the last 600 chars of the reply so we see the answer +
     // the immediately preceding reasoning, not the whole essay.
@@ -160,7 +162,8 @@ Future<void> main(List<String> args) async {
 
   stdout.writeln('\n=== aggregate ===');
   final total = passed + failed + unparsable;
-  stdout.writeln('  $passed/$total PASS,  $failed FAIL,  $unparsable UNPARSABLE');
+  stdout
+      .writeln('  $passed/$total PASS,  $failed FAIL,  $unparsable UNPARSABLE');
 
   await engine.dispose();
 }

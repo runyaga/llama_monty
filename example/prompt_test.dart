@@ -70,9 +70,19 @@ Every if/for/while/def header ends with `:`. Use simple f-strings
 
 const List<({String tag, String prompt})> _probes = [
   (tag: 'list-tmp', prompt: 'List the files in /tmp.'),
-  (tag: 'read-csv', prompt: 'What\'s the average price in /fixtures/sample.csv?'),
-  (tag: 'write-file', prompt: 'Write a one-line summary of /fixtures/welcome.md to /tmp/summary.txt.'),
-  (tag: 'format-num', prompt: 'Compute 22 / 7 and print it rounded to 4 decimal places.'),
+  (
+    tag: 'read-csv',
+    prompt: 'What\'s the average price in /fixtures/sample.csv?'
+  ),
+  (
+    tag: 'write-file',
+    prompt:
+        'Write a one-line summary of /fixtures/welcome.md to /tmp/summary.txt.'
+  ),
+  (
+    tag: 'format-num',
+    prompt: 'Compute 22 / 7 and print it rounded to 4 decimal places.'
+  ),
 ];
 
 ({bool ok, List<String> issues}) _check(String reply) {
@@ -92,7 +102,8 @@ const List<({String tag, String prompt})> _probes = [
   if (RegExp(r'^\s*class\s+\w', multiLine: true).hasMatch(reply)) {
     issues.add('uses `class` (forbidden)');
   }
-  if (!reply.contains('```monty') && !reply.contains('```python') &&
+  if (!reply.contains('```monty') &&
+      !reply.contains('```python') &&
       !reply.contains('```py')) {
     issues.add('no markdown fence in reply');
   }
@@ -102,7 +113,8 @@ const List<({String tag, String prompt})> _probes = [
 Future<void> main() async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
   // Gemma 4's recommended sampling.
   final ref = LlamaEngineRef(
     engine,
@@ -113,7 +125,8 @@ Future<void> main() async {
   for (final probe in _probes) {
     stdout.writeln('\n=== ${probe.tag}: ${probe.prompt} ===');
     final reply = await ref.complete([
-      LlamaChatMessage.fromText(role: LlamaChatRole.system, text: _systemPrompt),
+      LlamaChatMessage.fromText(
+          role: LlamaChatRole.system, text: _systemPrompt),
       LlamaChatMessage.fromText(role: LlamaChatRole.user, text: probe.prompt),
     ]);
     stdout.writeln('--- reply ---');

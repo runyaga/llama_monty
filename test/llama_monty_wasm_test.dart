@@ -165,13 +165,15 @@ Future<void> _loadBridge() async {
   final completer = Completer<void>();
   final script = web.document.createElement('script') as web.HTMLScriptElement
     ..src = url
-    ..onload = (web.Event _) { completer.complete(); }.toJS
+    ..onload = (web.Event _) {
+      completer.complete();
+    }.toJS
     ..onerror = (web.Event _) {
-        completer.completeError(
-          StateError('Failed to load bridge from $url — '
-              'check that dart_monty_core is a transitive dep'),
-        );
-      }.toJS;
+      completer.completeError(
+        StateError('Failed to load bridge from $url — '
+            'check that dart_monty_core is a transitive dep'),
+      );
+    }.toJS;
   web.document.head!.appendChild(script);
   await completer.future;
 }
@@ -216,21 +218,19 @@ void main() {
 
   group('DispatchMode.future — llm_complete', () {
     test('first call resolves to the fake response', () async {
-      final result = await runtime
-          .execute("llm_complete('hello')")
-          .result;
+      final result = await runtime.execute("llm_complete('hello')").result;
       expect(result.error, isNull, reason: result.error?.toString());
       final text = (result.value as MontyString).value;
       expect(text, equals(_fakeResponse));
     });
 
-    test('second call also resolves (regression: must not return raw coroutine)',
+    test(
+        'second call also resolves (regression: must not return raw coroutine)',
         () async {
       await runtime.execute("llm_complete('first call')").result;
 
-      final result = await runtime
-          .execute("llm_complete('second call')")
-          .result;
+      final result =
+          await runtime.execute("llm_complete('second call')").result;
       expect(result.error, isNull);
       final text = (result.value as MontyString).value;
       // Must be the actual response, not "<coroutine external_future(0)>".
@@ -240,9 +240,7 @@ void main() {
 
     test('third sequential call resolves correctly', () async {
       for (var i = 1; i <= 3; i++) {
-        final result = await runtime
-            .execute("llm_complete('call $i')")
-            .result;
+        final result = await runtime.execute("llm_complete('call $i')").result;
         expect(result.error, isNull, reason: 'call $i failed');
         expect((result.value as MontyString).value, equals(_fakeResponse));
       }
@@ -311,9 +309,8 @@ void main() {
         expect(agentResult.error, isNull);
         expect((agentResult.value as MontyInt).value, equals(4));
 
-        final replResult = await replRuntime
-            .execute("llm_complete('ping')")
-            .result;
+        final replResult =
+            await replRuntime.execute("llm_complete('ping')").result;
         expect(replResult.error, isNull);
         expect((replResult.value as MontyString).value, equals(_fakeResponse));
       } finally {

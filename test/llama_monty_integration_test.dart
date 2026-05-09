@@ -40,7 +40,8 @@ Future<void> _download(String url, IOSink dest) async {
           res.statusCode == 307 ||
           res.statusCode == 308) {
         final location = res.headers.value('location');
-        if (location == null) throw StateError('Redirect with no Location header');
+        if (location == null)
+          throw StateError('Redirect with no Location header');
         await res.drain<void>();
         currentUrl = location;
         continue;
@@ -83,7 +84,9 @@ Future<String> _ensureModel() async {
   } catch (_) {
     await sink.close();
     // Remove partial file so the next run retries.
-    try { File(path).deleteSync(); } catch (_) {}
+    try {
+      File(path).deleteSync();
+    } catch (_) {}
     rethrow;
   }
   await sink.close();
@@ -163,7 +166,8 @@ void main() {
     });
 
     test('system prompt is honoured', () async {
-      session = ChatSession(engine, systemPrompt: 'Always reply with exactly: PONG');
+      session =
+          ChatSession(engine, systemPrompt: 'Always reply with exactly: PONG');
       final buf = StringBuffer();
       await for (final chunk in session.create([LlamaTextContent('ping')])) {
         final content = chunk.choices.firstOrNull?.delta.content;

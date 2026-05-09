@@ -182,8 +182,8 @@ Future<FixtureScore> _runStrategy({
 ({double mean, double stdev, double min, double max}) _stats(List<double> xs) {
   if (xs.isEmpty) return (mean: 0, stdev: 0, min: 0, max: 0);
   final mean = xs.reduce((a, b) => a + b) / xs.length;
-  final variance = xs.fold<double>(0, (a, x) => a + (x - mean) * (x - mean)) /
-      xs.length;
+  final variance =
+      xs.fold<double>(0, (a, x) => a + (x - mean) * (x - mean)) / xs.length;
   final stdev = variance > 0 ? sqrt(variance) : 0.0;
   return (
     mean: mean,
@@ -235,7 +235,8 @@ Future<void> main(List<String> args) async {
 
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
   // Google's recommended sampling for Gemma 4: temp=1.0, top_p=0.95.
   final ref = LlamaEngineRef(
     engine,

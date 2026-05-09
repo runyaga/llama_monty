@@ -48,9 +48,9 @@ class SummaryFact {
   String renderLine() {
     final p = predicate.trim();
     final o = object.trim();
-    final hasNeg = RegExp(r"\b(not|no|never|n'?t|without)\b",
-            caseSensitive: false)
-        .hasMatch(p);
+    final hasNeg =
+        RegExp(r"\b(not|no|never|n'?t|without)\b", caseSensitive: false)
+            .hasMatch(p);
     final negPrefix = (polarity == 'negate' && !hasNeg) ? 'NOT ' : '';
     return [subject, '$negPrefix$p', o]
         .map((s) => s.trim())
@@ -388,8 +388,10 @@ class ChatSummarizePipeline {
           if (subj.isEmpty) continue;
           final pred = (f['predicate'] as Object?)?.toString().trim() ?? '';
           final obj = (f['object'] as Object?)?.toString().trim() ?? '';
-          final pol = (f['polarity'] as Object?)?.toString().trim().toLowerCase();
-          final turn = (f['turn'] as Object?) is num ? (f['turn'] as num).toInt() : null;
+          final pol =
+              (f['polarity'] as Object?)?.toString().trim().toLowerCase();
+          final turn =
+              (f['turn'] as Object?) is num ? (f['turn'] as num).toInt() : null;
           facts.add(SummaryFact(
             subject: subj.toLowerCase(),
             predicate: pred.toLowerCase(),
@@ -454,8 +456,7 @@ class ChatSummarizePipeline {
     return engineRef.complete([
       LlamaChatMessage.fromText(
         role: LlamaChatRole.system,
-        text:
-            'Write a 4-6 $style summary covering ALL of these facts. '
+        text: 'Write a 4-6 $style summary covering ALL of these facts. '
             'Preserve every negation exactly (use "not" or "never" — never '
             'invert a negate fact). Do not add information not present. '
             'Reply with the summary only.',
@@ -473,7 +474,8 @@ class ChatSummarizePipeline {
     final issues = <String>[];
     final lower = prose.toLowerCase();
 
-    if (RegExp(r"i (don'?t|do not) (know|recall|have)|i'?m (unable|sorry)|as an ai")
+    if (RegExp(
+            r"i (don'?t|do not) (know|recall|have)|i'?m (unable|sorry)|as an ai")
         .hasMatch(lower)) {
       issues.add('refusal');
     }

@@ -9,7 +9,6 @@
 
 import 'dart:io';
 
-import 'package:dart_monty/dart_monty.dart';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llamadart/llamadart.dart';
 
@@ -40,8 +39,8 @@ Allowed modules: math, re, json, datetime, pathlib.
 ''';
 
 String? _extractFence(String reply) {
-  final m = RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```')
-      .firstMatch(reply);
+  final m =
+      RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```').firstMatch(reply);
   return m?.group(1)?.trim();
 }
 
@@ -94,7 +93,8 @@ Future<String> _ask(LlamaEngine engine, List<LlamaChatMessage> msgs) async {
 Future<void> main() async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
 
   // Same Monty wiring the web app uses.
   final monty = MontyRuntime(os: defaultOsHandler());

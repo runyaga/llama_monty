@@ -20,17 +20,18 @@ Future<void> main() async {
   final tools = [
     ToolDefinition(
       name: 'get_datetime',
-      description: 'Returns the current UTC date and time as an ISO-8601 string.',
+      description:
+          'Returns the current UTC date and time as an ISO-8601 string.',
       parameters: [],
       handler: (_) async => DateTime.now().toUtc().toIso8601String(),
     ),
     ToolDefinition(
       name: 'run_python',
-      description:
-          'Executes Python code in a sandbox and returns the result. '
+      description: 'Executes Python code in a sandbox and returns the result. '
           'Use this for any calculation or data transformation.',
       parameters: [
-        ToolParam.string('code', description: 'Python code to run.', required: true),
+        ToolParam.string('code',
+            description: 'Python code to run.', required: true),
       ],
       handler: (params) async {
         final code = params.getString('code') ?? '';
@@ -38,7 +39,8 @@ Future<void> main() async {
         final r = await monty.execute(code).result;
         if (r.error != null) return 'Error: ${r.error}';
         final out = (r.printOutput ?? '').trim();
-        final val = r.value is MontyNone ? '' : '${r.value?.dartValue ?? ''}'.trim();
+        final val =
+            r.value is MontyNone ? '' : '${r.value?.dartValue ?? ''}'.trim();
         return [out, val].where((s) => s.isNotEmpty).join('\n');
       },
     ),
@@ -82,7 +84,8 @@ Future<void> main() async {
   }
 
   await demo('What is the current UTC time?');
-  await demo('Compute 17 factorial using run_python with code="import math; math.factorial(17)"');
+  await demo(
+      'Compute 17 factorial using run_python with code="import math; math.factorial(17)"');
 
   await monty.dispose();
   await engine.dispose();

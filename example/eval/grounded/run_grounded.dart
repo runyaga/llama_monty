@@ -75,8 +75,7 @@ _Fixture _parseFixture(File f) {
   if (fx.refuseSemantics) {
     // Refuse-style: ANY must_contain match counts as a pass on the
     // contains side.
-    final any =
-        fx.mustContain.any((s) => r.contains(s.toLowerCase()));
+    final any = fx.mustContain.any((s) => r.contains(s.toLowerCase()));
     if (!any) missed.add('(none of: ${fx.mustContain.join(' | ')})');
   } else {
     for (final s in fx.mustContain) {
@@ -125,7 +124,8 @@ Future<void> main(List<String> args) async {
 
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
 
   var pass = 0;
   var fail = 0;
@@ -142,13 +142,12 @@ Future<void> main(List<String> args) async {
       fail++;
     }
     stdout.writeln('  reply (${dt}ms, ${reply.length} chars):');
-    final preview = reply.length > 400
-        ? '${reply.substring(0, 400)}…'
-        : reply;
+    final preview = reply.length > 400 ? '${reply.substring(0, 400)}…' : reply;
     stdout.writeln(preview.split('\n').map((l) => '    $l').join('\n'));
     stdout.writeln('  result: ${s.pass ? 'PASS' : 'FAIL'}');
     if (s.missed.isNotEmpty) stdout.writeln('    missed:    ${s.missed}');
-    if (s.contraband.isNotEmpty) stdout.writeln('    contraband: ${s.contraband}');
+    if (s.contraband.isNotEmpty)
+      stdout.writeln('    contraband: ${s.contraband}');
   }
 
   stdout.writeln('\n=== aggregate ===');

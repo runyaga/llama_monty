@@ -39,7 +39,8 @@ const _outerSystemPrompt =
 Future<void> main() async {
   final engine = LlamaEngine(LlamaBackend());
   stdout.writeln('Loading model …');
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
   stdout.writeln('Loaded.\n');
 
   final engineRef = LlamaEngineRef(engine);

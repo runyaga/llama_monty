@@ -20,7 +20,8 @@ class _StubBackend implements LlamaBackend {
     String url,
     ModelParams params, {
     Function(double)? onProgress,
-  }) async => 0;
+  }) async =>
+      0;
   @override
   Future<void> modelFree(int modelHandle) async {}
   @override
@@ -35,7 +36,8 @@ class _StubBackend implements LlamaBackend {
     String prompt,
     GenerationParams params, {
     List<LlamaContentPart>? parts,
-  }) => const Stream.empty();
+  }) =>
+      const Stream.empty();
   @override
   void cancelGeneration() {}
   @override
@@ -43,13 +45,15 @@ class _StubBackend implements LlamaBackend {
     int modelHandle,
     String text, {
     bool addSpecial = true,
-  }) async => [];
+  }) async =>
+      [];
   @override
   Future<String> detokenize(
     int modelHandle,
     List<int> tokens, {
     bool special = false,
-  }) async => '';
+  }) async =>
+      '';
   @override
   Future<Map<String, String>> modelMetadata(int modelHandle) async => {};
   @override
@@ -74,7 +78,8 @@ class _StubBackend implements LlamaBackend {
   Future<int?> multimodalContextCreate(
     int modelHandle,
     String mmProjPath,
-  ) async => null;
+  ) async =>
+      null;
   @override
   Future<void> multimodalContextFree(int mmContextHandle) async {}
   @override
@@ -82,15 +87,15 @@ class _StubBackend implements LlamaBackend {
   @override
   Future<bool> supportsAudio(int mmContextHandle) async => false;
   @override
-  Future<({int free, int total})> getVramInfo() async =>
-      (total: 0, free: 0);
+  Future<({int free, int total})> getVramInfo() async => (total: 0, free: 0);
   @override
   Future<String> applyChatTemplate(
     int modelHandle,
     List<Map<String, dynamic>> messages, {
     String? customTemplate,
     bool addAssistant = true,
-  }) async => '';
+  }) async =>
+      '';
 }
 
 void main() {
@@ -107,13 +112,23 @@ void main() {
       expect(plugin.namespace, equals('llm'));
     });
 
-    test('exposes three functions', () {
-      expect(plugin.functions, hasLength(3));
+    test('exposes six functions', () {
+      expect(plugin.functions, hasLength(6));
     });
 
     test('function names are correct', () {
       final names = plugin.functions.map((f) => f.schema.name).toList();
-      expect(names, containsAll(['llm_complete', 'llm_chat', 'llm_chat_reset']));
+      expect(
+        names,
+        containsAll([
+          'llm_complete',
+          'llm_chat',
+          'llm_chat_reset',
+          'llm_stream_open',
+          'llm_stream_next',
+          'llm_stream_close',
+        ]),
+      );
     });
 
     group('llm_complete', () {

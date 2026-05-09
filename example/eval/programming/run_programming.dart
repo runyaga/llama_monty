@@ -87,13 +87,27 @@ final List<_Probe> _probes = [
     id: 'P3',
     tier: 2,
     title: 'list of primes below 50',
-    userPrompt:
-        'Print the list of prime numbers below 50, in order, like: '
+    userPrompt: 'Print the list of prime numbers below 50, in order, like: '
         '[2, 3, 5, 7, ...]',
     expect: (out) {
       // Required primes the output must contain.
-      const required = ['2', '3', '5', '7', '11', '13', '17', '19', '23',
-                        '29', '31', '37', '41', '43', '47'];
+      const required = [
+        '2',
+        '3',
+        '5',
+        '7',
+        '11',
+        '13',
+        '17',
+        '19',
+        '23',
+        '29',
+        '31',
+        '37',
+        '41',
+        '43',
+        '47'
+      ];
       return required.every((n) => _contains(out, n)) &&
           // forbid 1 and 49 sneaking in
           !RegExp(r'\b1\b').hasMatch(out.split('[').last);
@@ -105,8 +119,7 @@ final List<_Probe> _probes = [
     id: 'P4',
     tier: 3,
     title: 'CSV average from /fixtures',
-    userPrompt:
-        'Read /fixtures/sample.csv (a header line then rows of '
+    userPrompt: 'Read /fixtures/sample.csv (a header line then rows of '
         'name,quantity,price). Compute and print the AVERAGE price across '
         'all rows, rounded to 2 decimal places. Use only the math, re, '
         'json modules and pathlib. Do NOT import csv.',
@@ -117,8 +130,7 @@ final List<_Probe> _probes = [
     id: 'P5',
     tier: 3,
     title: 'factorial 20 without math.factorial',
-    userPrompt:
-        'Print the factorial of 20. The math module IS available, but '
+    userPrompt: 'Print the factorial of 20. The math module IS available, but '
         'do NOT use math.factorial — implement the multiplication '
         'yourself.',
     expect: (out) => _contains(out, '2432902008176640000'),
@@ -127,8 +139,7 @@ final List<_Probe> _probes = [
     id: 'P6',
     tier: 3,
     title: 'unique-word counter without classes',
-    userPrompt:
-        'Given the sentence "the cat sat on the mat the cat purred", '
+    userPrompt: 'Given the sentence "the cat sat on the mat the cat purred", '
         'count occurrences of each word and print the result as a Python '
         'dict mapping word -> count. Order does not matter. Do NOT '
         'define a class.',
@@ -145,8 +156,7 @@ final List<_Probe> _probes = [
     id: 'P7',
     tier: 4,
     title: 'bubble-sort swap count',
-    userPrompt:
-        'Implement bubble sort in pure Python. Sort the list '
+    userPrompt: 'Implement bubble sort in pure Python. Sort the list '
         '[64, 34, 25, 12, 22, 11, 90] and print BOTH the sorted list AND '
         'the EXACT number of swap operations performed. Use the form: '
         'print(sorted_list); print("swaps:", n)',
@@ -163,8 +173,7 @@ final List<_Probe> _probes = [
     id: 'P8',
     tier: 4,
     title: 'run-length encode + decode round-trip',
-    userPrompt:
-        'For the string "AAABBBCCDDDDEEEE": (1) compute the run-length '
+    userPrompt: 'For the string "AAABBBCCDDDDEEEE": (1) compute the run-length '
         'encoded form as a list of [char, count] pairs; (2) decode it '
         'back into a string; (3) print the encoded list AND the decoded '
         'string AND whether the round trip equals the original (True/'
@@ -203,8 +212,7 @@ final List<_Probe> _probes = [
     id: 'P10',
     tier: 5,
     title: 'memoize without decorators',
-    userPrompt:
-        'Memoize a recursive `fib(n)` function in pure Python without '
+    userPrompt: 'Memoize a recursive `fib(n)` function in pure Python without '
         'using decorators (no @lru_cache, no custom decorator syntax). '
         'Print fib(30). The result must be 832040.',
     expect: (out) => _contains(out, '832040'),
@@ -213,8 +221,8 @@ final List<_Probe> _probes = [
 
 /// Reuses the same fence/raw-Python extractor as the web demo.
 String? _extractCode(String reply) {
-  final fenced = RegExp(r'```(?:python|py)?\s*\n?([\s\S]*?)```')
-      .firstMatch(reply);
+  final fenced =
+      RegExp(r'```(?:python|py)?\s*\n?([\s\S]*?)```').firstMatch(reply);
   if (fenced != null) {
     final c = fenced.group(1)?.trim();
     if (c != null && c.isNotEmpty) return c;
@@ -245,7 +253,8 @@ Future<({String code, String reply})> _writeCode(
 Future<void> main(List<String> args) async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
 
   // Monty runtime with default OS handler so pathlib works for P4 (csv).
   // Also seeds /fixtures/sample.csv on native (LocalFileSystem allows
@@ -301,7 +310,8 @@ Path('/tmp/fixtures/sample.csv').write_text(csv_data)
       continue;
     }
 
-    stdout.writeln('  --- code (${w.code.length} chars, write ${dtWrite}ms) ---');
+    stdout
+        .writeln('  --- code (${w.code.length} chars, write ${dtWrite}ms) ---');
     stdout.writeln(w.code.split('\n').take(20).map((l) => '    $l').join('\n'));
     if (w.code.split('\n').length > 20) stdout.writeln('    …');
 

@@ -19,7 +19,8 @@ const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 Future<void> main() async {
   final engine = LlamaEngine(LlamaBackend());
   stdout.writeln('Loading model …');
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 4096));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 4096));
   stdout.writeln('Loaded.\n');
 
   final engineRef = LlamaEngineRef(engine);
@@ -52,7 +53,8 @@ print('--- got', chunks, 'chunks ---')
   stdout.writeln();
 
   // ---------- Test 2: two sequential streams (queueing path) ---------------
-  stdout.writeln('--- Test 2: open second stream right after closing first ---');
+  stdout
+      .writeln('--- Test 2: open second stream right after closing first ---');
   const t2 = '''
 def stream_to_string(prompt):
     h = llm_stream_open(prompt)

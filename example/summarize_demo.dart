@@ -32,7 +32,8 @@ Otherwise just chat normally.
 Future<void> main() async {
   final engine = LlamaEngine(LlamaBackend());
   stdout.writeln('Loading model from $_modelPath …');
-  await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
+  await engine.loadModel(_modelPath,
+      modelParams: ModelParams(contextSize: 8192));
   stdout.writeln('Loaded.\n');
 
   final engineRef = LlamaEngineRef(engine);
@@ -128,7 +129,8 @@ Future<void> main() async {
   await sendTurn('I live in Texas.');
   await sendTurn('I have a cat named Pixel.');
 
-  stdout.writeln('--- Outer chat history (${chatSession.history.length} msgs) ---');
+  stdout.writeln(
+      '--- Outer chat history (${chatSession.history.length} msgs) ---');
   stdout.writeln(_renderHistory(chatSession));
   stdout.writeln('---------------------------------------------\n');
 
@@ -169,11 +171,8 @@ print('chat reset; new history length =', len(chat_history_messages()))
 String _renderHistory(ChatSession s) {
   final out = StringBuffer();
   for (final m in s.history) {
-    final text = m.parts
-        .whereType<LlamaTextContent>()
-        .map((p) => p.text)
-        .join()
-        .trim();
+    final text =
+        m.parts.whereType<LlamaTextContent>().map((p) => p.text).join().trim();
     if (text.isEmpty) continue;
     out.writeln('  [${m.role.name}] $text');
   }
