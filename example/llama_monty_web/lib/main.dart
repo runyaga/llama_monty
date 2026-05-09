@@ -560,22 +560,10 @@ class _ChatPageState extends State<ChatPage> {
         final code = params.getRequiredString('code');
         _appendChatLog('code', code);
 
-        // Pre-flight: ask Monty to typecheck the code WITHOUT executing.
-        // Catches missing colons, unsupported features (`with`, `class`,
-        // `.format()`, etc.) before we burn time on execute(). Errors are
-        // returned to the LLM verbatim so it can fix-and-retry.
-        try {
-          final diagnostics = await Monty.typeCheck(code);
-          if (diagnostics.isNotEmpty) {
-            final summary = diagnostics
-                .take(3)
-                .map((d) => '${d.line}:${d.column} ${d.code}: ${d.message}')
-                .join('\n');
-            _appendChatLog('error', '[typeCheck rejected]\n$summary');
-            return 'Error (pre-flight typeCheck failed):\n$summary\n'
-                'Fix these and call run_python again.';
-          }
-        } catch (_) {/* typeCheck unavailable / failed — fall through to execute */}
+        // (We had a Monty.typeCheck pre-flight here. Removed — it
+        // rejected too much valid code, including patterns the
+        // interpreter actually runs fine. Errors that DO come back
+        // from execute() below are still surfaced to the LLM.)
 
         final result = await agentSession.execute(code).result;
 
