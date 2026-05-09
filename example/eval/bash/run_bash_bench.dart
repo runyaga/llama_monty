@@ -225,9 +225,8 @@ Future<void> main() async {
       wasmHost: wasmHost,
       tc: tc,
     );
-    if (!result.passed) {
-      stdout.writeln(result.transcript);
-    }
+    // Always dump transcript so every run_bash literal is captured.
+    stdout.writeln(result.transcript);
     final mark = !result.passed && result.knownFail
         ? '△'
         : result.passed

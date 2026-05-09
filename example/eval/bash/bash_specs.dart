@@ -288,14 +288,18 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
     ),
   ),
+  // Phase Next-N1 added pipes. Was a knownFail rejection check; now
+  // tests the happy path — the model should chain commands with `|`
+  // and the harness should return the piped stdout.
   BashSpec(
-    id: 'B14_disallowed_pipe',
+    id: 'B14_pipe_works',
     prompt:
-        'Try to use run_bash with `cat /notes.txt | head -1`. Tell me '
-        'what happens.',
-    knownFail: true,
+        'Use run_bash with `cat /tmp/llama-test/fixtures/numbers.txt | '
+        'head -n 2`. Tell me what bash printed.',
     verify: _v(
-      proseContainsAny: ['error', 'not allow', 'pipe', 'rejected'],
+      fenceContains: '|',
+      stdoutContainsAll: ['1', '2'],
+      proseContainsAll: ['1', '2'],
     ),
   ),
 ];
