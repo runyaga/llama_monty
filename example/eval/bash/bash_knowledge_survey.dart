@@ -323,5 +323,18 @@ Future<void> main() async {
   await engine.dispose();
 }
 
-bool _isAllowListed(String argv0) =>
-    {'pwd', 'cd', 'ls', 'cat', 'find', 'echo'}.contains(argv0);
+// Post-Phase-A1 allow-list (dart_wasm_sandbox commit 190d0c3).
+// The runtime adds wc / grep / head / tail; pipes, sed, awk, sort,
+// diff, and others remain rejected.
+bool _isAllowListed(String argv0) => const {
+      'pwd',
+      'cd',
+      'ls',
+      'cat',
+      'find',
+      'echo',
+      'wc',
+      'grep',
+      'head',
+      'tail',
+    }.contains(argv0);

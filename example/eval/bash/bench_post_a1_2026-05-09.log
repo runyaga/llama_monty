@@ -1,0 +1,73 @@
+Running build hooks...Running build hooks...Loading Gemma 4 …
+
+========= B01_echo_literal =========
+result: ✓ PASS (turns=1) — ok
+
+========= B02_echo_multi_arg =========
+result: ✓ PASS (turns=1) — ok
+
+========= B03_pwd_root =========
+result: ✓ PASS (turns=1) — ok
+
+========= B04_cat_notes =========
+result: ✓ PASS (turns=2) — ok
+
+========= B05_cat_numbers =========
+result: ✓ PASS (turns=2) — ok
+
+========= B06_ls_data =========
+result: ✓ PASS (turns=1) — ok
+
+========= B07_find_root =========
+result: ✓ PASS (turns=2) — ok
+
+========= B08_cd_then_pwd =========
+result: ✓ PASS (turns=2) — ok
+
+========= B09_cd_then_ls =========
+result: ✓ PASS (turns=1) — ok
+
+========= B10_cd_then_cat =========
+result: ✓ PASS (turns=1) — ok
+
+========= B11_multi_call_cwd_persists =========
+result: ✓ PASS (turns=2) — ok
+
+========= B12_find_then_cat =========
+result: ✓ PASS (turns=2) — ok
+
+========= C01_bash_then_python_sum =========
+result: ✓ PASS (turns=2) — ok
+
+========= C02_bash_find_then_python_count =========
+result: ✓ PASS (turns=2) — ok
+
+========= C03_python_value_via_bash_echo =========
+result: ✓ PASS (turns=1) — ok
+
+========= B13_disallowed_awk =========
+result: ✓ PASS (turns=1) — ok
+
+========= B14_disallowed_pipe =========
+result: ✓ PASS (turns=2) — ok
+
+========= summary =========
+✓ B01_echo_literal                   turns=1 — ok
+✓ B02_echo_multi_arg                 turns=1 — ok
+✓ B03_pwd_root                       turns=1 — ok
+✓ B04_cat_notes                      turns=2 — ok
+✓ B05_cat_numbers                    turns=2 — ok
+✓ B06_ls_data                        turns=1 — ok
+✓ B07_find_root                      turns=2 — ok
+✓ B08_cd_then_pwd                    turns=2 — ok
+✓ B09_cd_then_ls                     turns=1 — ok
+✓ B10_cd_then_cat                    turns=1 — ok
+✓ B11_multi_call_cwd_persists        turns=2 — ok
+✓ B12_find_then_cat                  turns=2 — ok
+✓ C01_bash_then_python_sum           turns=2 — ok
+✓ C02_bash_find_then_python_count    turns=2 — ok
+✓ C03_python_value_via_bash_echo     turns=1 — ok
+✓ B13_disallowed_awk                 turns=1 — ok
+✓ B14_disallowed_pipe                turns=2 — ok
+
+17 PASS · 0 FAIL · 0 △ known-fail (of 17)

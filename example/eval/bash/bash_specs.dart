@@ -222,9 +222,9 @@ final List<BashSpec> bashSpecs = <BashSpec>[
   BashSpec(
     id: 'B12_find_then_cat',
     prompt:
-        'Use run_bash to find files under /logs (one call), then cat the '
-        'first one (second call). Tell me the first non-blank line of '
-        'that file.',
+        'Use run_bash to find files under /tmp/llama-test/state (one call), '
+        'then cat the first one (second call). Tell me the first non-blank '
+        'line of that file.',
     verify: _v(
       fenceContains: 'run_bash',
       stdoutContainsAll: ['INFO'],
@@ -273,12 +273,16 @@ final List<BashSpec> bashSpecs = <BashSpec>[
   ),
 
   // Tier 7 — known-fail / disallowed (2)
+  // Phase A1 added wc/grep/head/tail to the allow-list, so the
+  // original B13_disallowed_grep no longer tests rejection. Swapped
+  // to awk, which is still rejected (and the model still naturally
+  // reaches for it on sum-a-column tasks per the survey).
   BashSpec(
-    id: 'B13_disallowed_grep',
+    id: 'B13_disallowed_awk',
     prompt:
-        'Try to use run_bash with `grep INFO '
-        '/tmp/llama-test/state/app.log`. Tell me what happens and (if it '
-        'failed) explain why.',
+        'Try to use run_bash with `awk \'{s+=\$1} END {print s}\' '
+        '/tmp/llama-test/fixtures/numbers.txt`. Tell me what happens '
+        'and (if it failed) explain why.',
     knownFail: true,
     verify: _v(
       proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
