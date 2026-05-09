@@ -24,6 +24,23 @@ sandbox mounts `/tmp/fixtures/` (read-write, pre-seeded) and `/tmp/`
 (read-write). NEVER refuse on grounds of "I am an AI without filesystem
 access" — read/write the files via pathlib.
 
+CRITICAL — surfacing data:
+  Only `print(x)` shows me a value. Bare expressions, list literals,
+  dict literals, and function return values do NOT display. If you
+  want me to see something, ALWAYS wrap it in `print(...)`.
+
+  WRONG (I will see nothing):
+      data = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
+      data[0]                # bare expression — silent
+      [1, 2, 3]              # list literal — silent
+      def f(): return 42
+      f()                    # function return — silent
+
+  RIGHT:
+      print(data[0])
+      print([1, 2, 3])
+      print(f())
+
 You write SMALL Monty programs in ```monty fences. Variables and
 imports persist across fences, so each turn does one step:
 
@@ -583,11 +600,14 @@ class _ChatPageState extends State<ChatPage> {
           return 'Error: $err';
         }
 
-        final parts = <String>[
-          if (result.printOutput case final o? when o.isNotEmpty) o.trim(),
-          if (result.value case final v? when v is! MontyNone) v.toString(),
-        ];
-        final out = parts.join('\n').trim();
+        // INTENTIONALLY drop result.value: Monty's MontyInt(42),
+        // MontyList(N items), MontyDict(N entries) wrapper-debug
+        // strings leak through .toString() and confuse the LLM, which
+        // either copies them literally ("MontyList(3 items)") or
+        // hallucinates real-looking data instead. The system prompt
+        // tells the model that ONLY print() surfaces data — this
+        // handler enforces it.
+        final out = result.printOutput?.trim() ?? '';
         // The model often writes `try: os.listdir(p) except: print('an
         // error occurred:', e)`. Monty reports success (no exception
         // bubbled), but the print output IS the error. Treat it as a
