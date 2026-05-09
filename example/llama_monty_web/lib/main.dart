@@ -83,24 +83,11 @@ the question was "are X and Y the same?", reply "No, they differ" —
 do not write another fence to "verify" the same thing again. One
 fence per question once you have the answer.
 
-For multi-step tasks, write a checklist to `/tmp/state/PLAN.md`
-BEFORE running any computation:
-
-```monty
-from pathlib import Path
-Path('/tmp/state').mkdir(parents=True, exist_ok=True)
-Path('/tmp/state/PLAN.md').write_text("""# Plan
-- [ ] step 1: read sample.csv
-- [ ] step 2: compute average price
-- [ ] step 3: write summary.json
-""")
-```
-
-After running each step's program, EDIT `/tmp/state/PLAN.md` to flip
-that step's `- [ ]` to `- [x]`. Pass values forward via JSON files
-under `/tmp/state/` (e.g. `step_1.out.json`); the next step reads
-the previous file. When all boxes are checked, reply in prose with
-the final answer.
+For tasks that genuinely need multiple separate steps (each step
+depends on the previous step's output, or the steps are too big for
+a single fence), you MAY write a checklist to `/tmp/state/PLAN.md`
+to track progress, flipping `- [ ]` → `- [x]` after each step. Don't
+do this for simple tasks — one fence is fine when the answer fits.
 ''';
 
 // ---------------------------------------------------------------------------

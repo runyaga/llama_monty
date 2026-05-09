@@ -77,22 +77,11 @@ IN PLAIN PROSE WITHOUT A FENCE. The harness only knows you are done
 when you stop writing fences. One fence per question once you have
 the answer.
 
-For multi-step tasks, write a checklist to `/tmp/state/PLAN.md`
-BEFORE running any computation:
-
-```monty
-from pathlib import Path
-Path('/tmp/state').mkdir(parents=True, exist_ok=True)
-Path('/tmp/state/PLAN.md').write_text("""# Plan
-- [ ] step 1: ...
-- [ ] step 2: ...
-""")
-```
-
-After each step's program runs, EDIT `/tmp/state/PLAN.md` to flip
-that step's `- [ ]` to `- [x]`. Pass values forward via JSON files
-under `/tmp/state/` (e.g. `step_1.out.json`). When all boxes are
-checked, reply in prose with the final answer.
+For tasks that genuinely need multiple separate steps (each step
+depends on the previous step's output, or the steps are too big for
+a single fence), you MAY write a checklist to `/tmp/state/PLAN.md`
+to track progress. Don't do this for simple tasks — one fence is
+fine when the answer fits.
 ''';
 
 // ---------------------------------------------------------------------------
@@ -425,49 +414,37 @@ else:
       verify: (m) async => (ok: true, reason: 'turn-bound check in main'),
     ),
     TestCase(
-      // Plan-based decomposition: model must (1) write PLAN.md, (2) execute
-      // each step writing intermediates to /tmp/state/, (3) check off the
-      // plan, (4) write final summary.json. Asserts side-effects on disk:
-      // PLAN.md fully checked AND summary.json contains the right keys.
-      id: 'E_plan_summary_json',
+      // Multi-output side-effect: write a JSON summary.json with three
+      // computed fields. Plan/PLAN.md is OPTIONAL — we don't care HOW
+      // the model gets there, only that summary.json on disk has the
+      // right keys with the right values.
+      id: 'E_summary_json',
       prompt:
           'Compute the min price, max price, and average price across all '
-          'rows in /tmp/fixtures/sample.csv. Use a checklist at '
-          '/tmp/state/PLAN.md and write the final result as JSON to '
-          '/tmp/state/summary.json with keys: min, max, avg (rounded to 2 '
-          'decimals).',
-      maxTurns: 12,
+          'rows in /tmp/fixtures/sample.csv. Write the final result as JSON '
+          'to /tmp/state/summary.json with keys: min, max, avg (rounded to '
+          '2 decimals).',
+      maxTurns: 6,
       verify: (m) async {
         final r = await m.execute('''
 from pathlib import Path
 import json
 
-plan = Path('/tmp/state/PLAN.md')
 summary = Path('/tmp/state/summary.json')
-
-if not plan.exists():
-    print('NO_PLAN')
-elif not summary.exists():
+if not summary.exists():
     print('NO_SUMMARY')
 else:
-    plan_text = plan.read_text()
-    unchecked = plan_text.count('- [ ]')
-    checked = plan_text.count('- [x]') + plan_text.count('- [X]')
     data = json.loads(summary.read_text())
-    print(f'plan_checked={checked} plan_unchecked={unchecked}')
     print(f'min={data.get("min")} max={data.get("max")} avg={data.get("avg")}')
 ''').result;
         if (r.error != null) {
           return (ok: false, reason: 'verify failed: \${r.error!.message}');
         }
         final out = (r.printOutput ?? '').trim();
-        if (out.startsWith('NO_PLAN')) {
-          return (ok: false, reason: 'PLAN.md not written');
-        }
         if (out.startsWith('NO_SUMMARY')) {
           return (ok: false, reason: 'summary.json not written');
         }
-        // Extract values for sanity check. Expected min=0.10, max=0.45, avg=0.25.
+        // Expected min=0.10, max=0.45, avg=0.25.
         final mins = RegExp(r'min=([\d.]+)').firstMatch(out)?.group(1);
         final maxs = RegExp(r'max=([\d.]+)').firstMatch(out)?.group(1);
         final avgs = RegExp(r'avg=([\d.]+)').firstMatch(out)?.group(1);
@@ -481,13 +458,7 @@ else:
         if (avg == null || (avg - 0.25).abs() > 0.01) {
           return (ok: false, reason: 'avg=\$avgs (expected 0.25)');
         }
-        final unchecked = RegExp(
-          r'plan_unchecked=(\d+)',
-        ).firstMatch(out)?.group(1);
-        if (unchecked != '0') {
-          return (ok: false, reason: 'PLAN.md still has \$unchecked unchecked');
-        }
-        return (ok: true, reason: 'PLAN checked, summary correct');
+        return (ok: true, reason: 'summary={min:$mins, max:$maxs, avg:$avgs}');
       },
     ),
     TestCase(
