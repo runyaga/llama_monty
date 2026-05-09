@@ -1,0 +1,214 @@
+Running build hooks...Running build hooks...Loading model …
+
+=== P1 (T1): sum 1..100 ===
+  --- code (64 chars, write 9903ms) ---
+    s = 0
+    i = 1
+    while i <= 100:
+        s = s + i
+        i = i + 1
+    print(s)
+  status: PASS  (run 1ms)
+  output: 5050
+
+=== P2 (T2): fibonacci 12 ===
+  --- code (117 chars, write 10182ms) ---
+    a = 0
+    b = 1
+    i = 2
+    result = 0
+    
+    while i <= 12:
+        result = a + b
+        a = b
+        b = result
+        i = i + 1
+    
+    print(result)
+  status: PASS  (run 0ms)
+  output: 144
+
+=== P3 (T2): list of primes below 50 ===
+  --- code (442 chars, write 9485ms) ---
+    primes = []
+    limit = 50
+    
+    for n in range(2, limit):
+        is_prime = True
+        # Check divisibility from 2 up to the integer part of the square root of n
+        d = 2
+        while d * d <= n:
+            if n % d == 0:
+                is_prime = False
+                break
+            d = d + 1
+    
+        if is_prime:
+            primes.append(n)
+    
+    # Print the result in the requested list format
+    print("[")
+    for i in range(len(primes)):
+        print(primes[i], end=", ")
+    …
+  status: PASS  (run 0ms)
+  output: [
+2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, ]
+
+=== P4 (T3): CSV average from /fixtures ===
+  --- code (1830 chars, write 15145ms) ---
+    import pathlib
+    import math
+    
+    file_path = pathlib.Path("/tmp/fixtures/sample.csv")
+    total_price_sum = 0.0
+    record_count = 0
+    
+    try:
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+    
+        if not lines:
+            print("No data found in the file.")
+        else:
+            # Skip header line (the first line)
+            data_lines = lines[1:]
+    
+            for i in range(len(data_lines)):
+                line = data_lines[i].strip()
+                if not line:
+    …
+  status: ERROR_PY  (run 4ms)
+  monty error: The monty syntax parser does not yet support context managers (with statements)
+
+=== P5 (T3): factorial 20 without math.factorial ===
+  --- code (83 chars, write 6234ms) ---
+    result = 1
+    n = 20
+    
+    for i in range(1, n + 1):
+        result = result * i
+    
+    print(result)
+  status: PASS  (run 0ms)
+  output: 2432902008176640000
+
+=== P6 (T3): unique-word counter without classes ===
+  --- code (463 chars, write 13487ms) ---
+    import re
+    
+    sentence = "the cat sat on the mat the cat purred"
+    words = re.findall(r'\w+', sentence)
+    
+    # Initialize counting structure. Although collections are restricted, 
+    # we must create a map/dictionary to satisfy the output requirement.
+    counts = {}
+    
+    for i in range(len(words)):
+        word = words[i]
+        
+        # Check if word already exists in counts
+        if word in counts:
+            counts[word] = counts[word] + 1
+        else:
+            counts[word] = 1
+    
+    print(counts)
+  status: PASS  (run 3ms)
+  output: {'the': 3, 'cat': 2, 'sat': 1, 'on': 1, 'mat': 1, 'purred': 1}
+
+=== P7 (T4): bubble-sort swap count ===
+  --- code (465 chars, write 19831ms) ---
+    arr = [64, 34, 25, 12, 22, 11, 90]
+    n = len(arr)
+    swaps = 0
+    
+    outer_loop = 0
+    while outer_loop < n - 1
+        inner_loop = 0
+        while inner_loop < n - 1 - outer_loop
+            if arr[inner_loop] > arr[inner_loop + 1]
+                temp = arr[inner_loop]
+                arr[inner_loop] = arr[inner_loop + 1]
+                arr[inner_loop + 1] = temp
+                swaps = swaps + 1
+            inner_loop = inner_loop + 1
+        outer_loop = outer_loop + 1
+    
+    print(arr)
+    print("swaps:", swaps)
+  status: ERROR_PY  (run 0ms)
+  monty error: Expected `:`, found newline at byte range 98..99
+
+=== P8 (T4): run-length encode + decode round-trip ===
+  --- code (872 chars, write 21850ms) ---
+    S = "AAABBBCCDDDDEEEE"
+    n = len(S)
+    encoded_list = []
+    i = 0
+    
+    while i < n:
+        char = S[i]
+        count = 1
+        j = i + 1
+        
+        # Count consecutive occurrences
+        while j < n and S[j] == char:
+            count = count + 1
+            j = j + 1
+        
+        # Store the run-length pair
+        encoded_list.append([char, count])
+        
+        # Move index to the start of the next run
+        i = j
+    …
+  status: PASS  (run 0ms)
+  output: Encoded list: [['A', 3], ['B', 3], ['C', 2], ['D', 4], ['E', 4]]
+Decoded string: AAABBBCCDDDDEEEE
+Round trip equals original: True
+
+=== P9 (T4): strict JSON output spec ===
+  --- code (183 chars, write 7322ms) ---
+    import json
+    
+    data = {
+        "version": 1,
+        "items": [
+            {"id": 1, "name": "alpha"},
+            {"id": 2, "name": "beta"}
+        ]
+    }
+    
+    json_string = json.dumps(data)
+    print(json_string)
+  status: FAIL_OUTPUT  (run 0ms)
+  output: {"version": 1, "items": [{"id": 1, "name": "alpha"}, {"id": 2, "name": "beta"}]}
+
+=== P10 (T5): memoize without decorators ===
+  --- code (249 chars, write 9919ms) ---
+    memo = {}
+    
+    def fib(n):
+        if n in memo:
+            return memo[n]
+        
+        if n == 0:
+            result = 0
+        elif n == 1:
+            result = 1
+        else:
+            result = fib(n - 1) + fib(n - 2)
+        
+        memo[n] = result
+        return result
+    
+    print(fib(30))
+  status: PASS  (run 0ms)
+  output: 832040
+
+=== aggregate ===
+  PASS         7/10
+  FAIL_OUTPUT  1/10
+  ERROR_PY     2/10
+  NO_CODE      0/10

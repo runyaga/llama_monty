@@ -1,0 +1,29 @@
+Running build hooks...Running build hooks...Loading model …
+
+=== G1 — simple grounded QA (grounded_factual) ===
+  reply (5592ms, 45 chars):
+    Acme Robotics employed 142 people as of 2024.
+  result: PASS
+
+=== G2 — refuse when out of context (refuse_oob) ===
+  reply (4606ms, 13 chars):
+    I don't know.
+  result: PASS
+
+=== G3 — multi-document synthesis (multi_doc) ===
+  reply (8248ms, 407 chars):
+    The charging-station handoff in FleetMind 4.2 was the single biggest contributor to Pioneer Foods' throughput improvement, resulting in a 23% increase in pick throughput after the upgrade (Document 2). The CTO considers this customer important because Pioneer Foods is now the company's largest reference customer, and their numbers provide the strongest case for the 4.2 architecture decision (Docum…
+  result: PASS
+
+=== G4 — domain-term preservation (term_preservation) ===
+  reply (10000ms, 395 chars):
+    The FleetMind controller uses an LSTM-based motion planner that consumes LIDAR point clouds at 20 Hz. It combines these with wheel-encoder odometry and IMU measurements using an Extended Kalman Filter, and then sends velocity commands over a CAN bus to each robot's drive controller. Path replanning begins whenever the cost-map cell occupancy probability for the planned trajectory exceeds 0.7.
+  result: PASS
+
+=== G5 — citation accuracy (citation) ===
+  reply (6973ms, 179 chars):
+    Pioneer Foods reported a 23% throughput improvement after deploying FleetMind 4.2 [S3]. Lila Tran, CTO, attributed this improvement primarily to fewer charging interruptions [S4].
+  result: PASS
+
+=== aggregate ===
+  5/5 PASS, 0 FAIL

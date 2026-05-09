@@ -35,6 +35,7 @@ Monty restrictions:
 - NO class keyword.
 - NO yield / generators.
 - NO match/case, del, decorators.
+- NO `with` / context managers — use try/finally or call read_text() / write_text() directly.
 - NO format() method, no .format() calls.
 - NO collections, functools, itertools, numpy, pandas.
 - NO chained assignment (i = j = 0).
@@ -185,14 +186,15 @@ final List<_Probe> _probes = [
         'the order shown above. The output MUST be parseable by '
         'json.loads.',
     expect: (out) {
-      // Find a JSON object in the output and check key facts.
-      final m = RegExp(r'\{[^{}]*"version"[^{}]*\}').firstMatch(out);
-      if (m == null) return false;
-      final s = m.group(0)!;
-      return _contains(s, '"version": 1') &&
-          _contains(s, '"items"') &&
-          _contains(s, '"alpha"') &&
-          _contains(s, '"beta"');
+      // Spec compliance: every required key/value pair must appear.
+      // Original regex required a flat single-line object which excluded
+      // legitimate nested-object output — bumped to substring checks.
+      return _contains(out, '"version": 1') &&
+          _contains(out, '"items"') &&
+          _contains(out, '"id": 1') &&
+          _contains(out, '"name": "alpha"') &&
+          _contains(out, '"id": 2') &&
+          _contains(out, '"name": "beta"');
     },
   ),
 
