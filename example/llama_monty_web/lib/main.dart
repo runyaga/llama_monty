@@ -614,6 +614,27 @@ class _ChatPageState extends State<ChatPage> {
       ],
     );
 
+    // Register run_script so Python in the agent session can invoke
+    // `run_script(path, inputs={...})` to run a .py file from disk in
+    // a fresh interpreter and read back its last-expression value.
+    // The readFile closure invokes the SHARED OsCallHandler directly
+    // (NOT via the runtime bridge — that would deadlock because
+    // run_script is itself already executing on the bridge). Using
+    // sharedOs means we read from the SAME filesystem the agent does
+    // (LocalFileSystem on native, MemoryFileSystem on web).
+    agentSession.register(
+      buildRunScriptFunction((path) async {
+        final raw = await sharedOs('Path.read_text', [path], null);
+        if (raw is! String) {
+          throw Exception(
+            'run_script: could not read $path: '
+            'os handler returned ${raw.runtimeType}',
+          );
+        }
+        return raw;
+      }),
+    );
+
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
       os: sharedOs,
