@@ -20,48 +20,39 @@ const _nativeModelPath =
     '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
-DECOMPOSE every task into the smallest python program that produces
-useful new information. Run it, READ the printed output, then write
-the NEXT small program using what you just learned. Variables and
-imports persist across turns.
+You write SMALL Monty programs in ```monty fences. Variables and
+imports persist across fences, so each turn does one step:
 
-Each turn: ONE small fence. Print the value(s) you want to inspect
-next. DO NOT try to write the whole solution in a single fence —
-that's how mistakes hide and the program fails after a long run.
-
-Example flow for "what's in /fixtures/sample.csv?":
-  turn 1 — peek:
-```python
+```monty
 from pathlib import Path
 data = Path('/fixtures/sample.csv').read_text().splitlines()
-print(len(data), 'rows')
-print('header:', data[0])
-print('first row:', data[1])
+print(len(data), 'rows; header:', data[0])
 ```
-  turn 2 — react to what you saw, do ONE more thing.
+
+Read the printed output, then write the NEXT small fence using what
+you saw. Don't pack everything into one fence.
 
 Files at /fixtures/: welcome.md, sample.csv (name,quantity,price),
 notes.txt.
 
-For VERBOSE multi-step work, isolate it in a subagent so the messy
-intermediate output never bloats this chat:
+For verbose work, hand it to a child sandbox — only the child's
+final print() bubbles back here:
 
-```python
-code = "data = ... ; print(answer)"   # the heavy work as a string
-h = sandbox_spawn(code)
+```monty
+h = sandbox_spawn("...code as a string... ; print(answer)")
 print(sandbox_await(h))
 sandbox_free(h)
 ```
 
-Children inherit ALL host functions — `llm_complete`, `llm_chat`,
-`chat_history`, `chat_summarize`, etc. — so a child can summarize or
-compress the parent context and print the result back as one line.
-Only the child's final printed value bubbles up to this chat.
+Children inherit every host function (llm_complete, chat_summarize,
+chat_history, etc.) so a child can compress this very chat and
+return one line.
 
-Monty subset: no class / yield / with / decorators / .format() / %
-formatting / del. Allowed modules: math, re, json, datetime, pathlib.
-Use `round(x, 2)` and simple f-strings (no method calls inside braces).
-Every if/for/while/def header ends with `:`.
+Monty is a Python SUBSET. No class / yield / with / decorators /
+.format() / % string-format / del. Modules: math, re, json,
+datetime, pathlib. Use round(x, 2) and simple f-strings (no
+method calls inside braces). Every if/for/while/def header
+ends with `:`.
 ''';
 
 const _systemPrompt = '''
@@ -832,8 +823,8 @@ else:
               );
               parts = [
                 LlamaTextContent(
-                  'The Python you wrote produced an error: $resultStr\n'
-                  'Write a corrected program in a ```python fence. '
+                  'Your last Monty program produced an error: $resultStr\n'
+                  'Write a corrected program in a ```monty fence. '
                   'Do not give the answer in prose.',
                 ),
               ];
@@ -1067,11 +1058,12 @@ else:
     return {};
   }
 
-  /// Extract Python code from a model response. Tries:
-  ///  1. ```python fenced block (markdown)
-  ///  2. Raw Python heuristic (text contains print(/def /import / etc.)
+  /// Extract Monty/Python code from a model response. Tries:
+  ///  1. ```monty fenced block (preferred — cues the restricted subset)
+  ///  2. ```python or bare ``` fenced block (legacy / fallback)
+  ///  3. Raw Python heuristic (text starts with print(/def /import / etc.)
   String? _extractPythonFence(String text) {
-    final fenced = RegExp(r'```(?:python|py)?\s*\n?([\s\S]*?)```')
+    final fenced = RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```')
         .firstMatch(text);
     if (fenced != null) {
       final code = fenced.group(1)?.trim();
@@ -1098,12 +1090,12 @@ else:
     return null;
   }
 
-  /// Removes the first python fence (and surrounding blank lines) from [text].
-  /// Used to display non-code prose as the assistant message when code is
-  /// extracted via [_extractPythonFence].
+  /// Removes the first monty/python fence (and surrounding blank lines)
+  /// from [text]. Used to display non-code prose as the assistant
+  /// message when code is extracted via [_extractPythonFence].
   String _stripPythonFence(String text) {
     final stripped = text.replaceFirst(
-      RegExp(r'```(?:python|py)?\s*\n?[\s\S]*?```\s*'),
+      RegExp(r'```(?:monty|python|py)?\s*\n?[\s\S]*?```\s*'),
       '',
     );
     // If no fence existed (raw-heuristic match), there's no prose to keep.
