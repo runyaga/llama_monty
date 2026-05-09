@@ -197,18 +197,26 @@ String _pct(double v) => '${(v * 100).toStringAsFixed(1)}%';
 
 Future<void> main(List<String> args) async {
   final verbose = args.contains('--verbose') || args.contains('-v');
-  final positional = args.where((a) => !a.startsWith('-')).toList();
   // Optional `--runs N` (default 1). Each fixture × strategy is summarized
   // N times so we can report mean ± stdev and stop ranking from a single
   // noisy sample at temp=1.0.
   var runs = 1;
+  final consumed = <int>{};
   for (var i = 0; i < args.length; i++) {
     if (args[i] == '--runs' && i + 1 < args.length) {
       runs = int.tryParse(args[i + 1]) ?? 1;
+      consumed.addAll([i, i + 1]);
     } else if (args[i].startsWith('--runs=')) {
       runs = int.tryParse(args[i].substring('--runs='.length)) ?? 1;
+      consumed.add(i);
+    } else if (args[i] == '--verbose' || args[i] == '-v') {
+      consumed.add(i);
     }
   }
+  final positional = <String>[
+    for (var i = 0; i < args.length; i++)
+      if (!consumed.contains(i) && !args[i].startsWith('-')) args[i],
+  ];
   final glob = positional.isEmpty ? '' : positional.first;
 
   final dir = Directory(_fixturesDir);

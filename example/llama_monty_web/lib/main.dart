@@ -46,6 +46,19 @@ Pre-seeded files at `/fixtures/`:
 
 You can also write new files anywhere in the in-memory tree.
 
+## User slash commands (NOT for you to call — the user invokes these directly)
+
+The user can type these at any time and they bypass the LLM:
+  /help        — list slash commands
+  /summarize   — run chat_summarize_v2 and print the summary
+  /compress    — summarize_v2 then chat_reset, seeding with the summary
+  /reset       — chat_reset
+  /history     — dump chat_history()
+
+If the user asks "compress" or "summarize and reset", remind them they
+can type /compress directly — that's faster than asking you to write
+Python.
+
 ## Built-in host functions
 
 Inside the fence you can call these:
@@ -533,6 +546,26 @@ class _ChatPageState extends State<ChatPage> {
       _busy = true;
     });
 
+    // Slash commands short-circuit the LLM round-trip and call host
+    // functions directly through the agent runtime. Built-in:
+    //   /help        — list slash commands
+    //   /summarize   — run chat_summarize_v2 and print the result
+    //   /compress    — chat_summarize_v2 + chat_reset(seed=summary)
+    //   /reset       — chat_reset (clears history, keeps system prompt)
+    if (msg.startsWith('/')) {
+      try {
+        await _handleSlash(msg);
+      } finally {
+        unawaited(_updateContextTokens());
+        setState(() {
+          _status = 'ready';
+          _busy = false;
+        });
+        _inputFocus.requestFocus();
+      }
+      return;
+    }
+
     try {
       var parts = <LlamaContentPart>[LlamaTextContent(msg)];
       var toolRetries = 0;
@@ -717,6 +750,93 @@ class _ChatPageState extends State<ChatPage> {
       });
       _inputFocus.requestFocus();
       _scrollToBottom();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Slash commands — invoke ChatShellPlugin host functions directly.
+  // -------------------------------------------------------------------------
+
+  Future<void> _handleSlash(String raw) async {
+    final cmd = raw.split(RegExp(r'\s+')).first.toLowerCase();
+    final argText = raw.substring(cmd.length).trim();
+    final agent = _agentSession;
+    if (agent == null) {
+      _appendChatLog('sys', 'agent runtime not ready');
+      return;
+    }
+
+    switch (cmd) {
+      case '/help':
+        _appendChatLog(
+          'sys',
+          'Slash commands:\n'
+          '  /summarize           run chat_summarize_v2 and print the result\n'
+          '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
+          '  /reset               chat_reset (wipe history, keep system prompt)\n'
+          '  /history             dump the current chat_history()\n'
+          '  /help                this list',
+        );
+      case '/summarize':
+        _appendChatLog('tool', 'chat_summarize_v2 (multi-step pipeline)');
+        final r = await agent
+            .execute('print(chat_summarize_v2())')
+            .result;
+        if (r.error != null) {
+          _appendChatLog('error', r.error!.message);
+        } else {
+          _appendChatLog('assistant', (r.printOutput ?? '').trim());
+        }
+      case '/compress':
+        _appendChatLog('tool', 'chat_summarize_v2 → chat_reset(seed=…)');
+        final script = '''
+summary = chat_summarize_v2()
+print('--- summary ---')
+print(summary)
+chat_reset(keep_system_prompt=True, seed='Earlier in this conversation: ' + summary)
+print('--- chat reset, seeded with summary ---')
+''';
+        final r = await agent.execute(script).result;
+        if (r.error != null) {
+          _appendChatLog('error', r.error!.message);
+        } else {
+          _appendChatLog('output', (r.printOutput ?? '').trim());
+          // Also force the chat session to re-pick-up the new state by
+          // reloading the field — chat_reset operates on _chatSession
+          // directly via the ChatShellPlugin, so no further wiring needed.
+          setState(() {});
+        }
+      case '/reset':
+        // Optional argument is a seed string (everything after /reset).
+        final seedArg = argText.isEmpty
+            ? 'None'
+            : "'''${argText.replaceAll(r'\', r'\\').replaceAll("'''", r"\'\'\'")}'''";
+        _appendChatLog('tool', 'chat_reset(seed=$seedArg)');
+        final r = await agent
+            .execute(
+              'chat_reset(keep_system_prompt=True, seed=$seedArg)\n'
+              "print('chat reset')",
+            )
+            .result;
+        if (r.error != null) {
+          _appendChatLog('error', r.error!.message);
+        } else {
+          _appendChatLog('sys', (r.printOutput ?? 'reset').trim());
+          setState(() {});
+        }
+      case '/history':
+        _appendChatLog('tool', 'chat_history()');
+        final r = await agent.execute('print(chat_history())').result;
+        if (r.error != null) {
+          _appendChatLog('error', r.error!.message);
+        } else {
+          _appendChatLog('output', (r.printOutput ?? '').trim());
+        }
+      default:
+        _appendChatLog(
+          'sys',
+          'unknown slash command: $cmd (try /help)',
+        );
     }
   }
 
