@@ -126,6 +126,34 @@ String _buildBigLog() {
   return buf.toString();
 }
 
+// ---------------------------------------------------------------------------
+// V-tier mount fixtures (Phase Mount M1 / dart_wasm_sandbox d7dc0ee).
+//
+// Shape mirrors `PHASE_VFS_PROPOSAL_FROM_DART_WASM_SANDBOX.md` §2.1
+// exactly — fixture content matches `demoVfs` shapes where they
+// overlap, so canonical bytes are the same on both code paths.
+//
+// Bench writes these to a per-suite mkdtemp, then mountDir() onto
+// '/project'. V14/V15/V16 are negative-test specs that don't need
+// fixture seeding but do need the mount to exist.
+//
+// Special: V16 oversize_file. The MAX_FILE_BYTES cap is 1 MiB; we
+// seed a 1.2 MiB blob to verify the cap surfaces as <host error -4>.
+// ---------------------------------------------------------------------------
+
+final Map<String, String> vfsMountFixtures = {
+  'readme.md': '# vfs-mount fixture\n',
+  'numbers.txt': '1\n2\n3\n42\n',
+  'greeting.txt': 'hello, world!\n',
+  'unsorted.txt': '3\n1\n4\n1\n5\n9\n2\n6\n',
+  'logs/app.log': '[INFO] booted\n[ERROR] oh no\n',
+  'logs/access.log': '200 /\n200 /api\n404 /missing\n',
+  'deep/nested/leaf.txt': 'deepest\n',
+  // V16 oversize fixture: 1.2 MiB > MAX_FILE_BYTES (1 MiB), should
+  // surface as -4 when read.
+  'huge.bin': 'X' * (1200 * 1024),
+};
+
 BashVerify _v({
   Iterable<String>? stdoutContainsAll,
   Iterable<String>? stdoutContainsAny,
@@ -807,5 +835,97 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     // for the probe; the LLM may hit the same bug at run time.
     canonicalSolution:
         r'grep -c auth /tmp/llama-test/state/big.log',
+  ),
+
+  // Tier 15 — VFS mount (V-tier, FFI-only). Tests whether the
+  // model's mental model of `/project/...` paths is identical to
+  // in-memory paths once the bench wires `mountDir`. Mount fixture
+  // tree per `PHASE_VFS_PROPOSAL_FROM_DART_WASM_SANDBOX.md` §2.1.
+  // Cherry-picked 7 of 17 (V01/V04/V07/V09/V14/V15/V16) per
+  // PHASE_VFS_REPLY.md.
+  BashSpec(
+    id: 'V01_cat_mounted',
+    prompt:
+        'Use run_bash to print the contents of '
+        '/project/greeting.txt.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      stdoutContainsAll: ['hello, world!'],
+      proseContainsAny: ['hello, world!', 'hello world'],
+    ),
+    canonicalSolution: 'cat /project/greeting.txt',
+  ),
+  BashSpec(
+    id: 'V04_wc_mount_file',
+    prompt:
+        'Use run_bash to count the lines in /project/numbers.txt. '
+        'Tell me the count.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      stdoutContainsAll: ['4'],
+      proseContainsAll: ['4'],
+    ),
+    canonicalSolution: 'wc -l /project/numbers.txt',
+  ),
+  BashSpec(
+    id: 'V07_cd_then_relative',
+    prompt:
+        'Use run_bash to cd into /project/logs, then cat app.log. '
+        'Tell me what was printed.',
+    verify: _v(
+      fenceContains: 'cd /project/logs',
+      stdoutContainsAll: ['INFO'],
+      proseContainsAny: ['INFO', 'booted', 'ERROR'],
+    ),
+    maxTurns: 5,
+    canonicalSolution: 'cd /project/logs && cat app.log',
+  ),
+  BashSpec(
+    id: 'V09_pipe_mount_grep',
+    prompt:
+        'Use run_bash with a pipe to count INFO lines in '
+        '/project/logs/app.log. '
+        'Hint: cat | grep | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['1'],
+      proseContainsAll: ['1'],
+    ),
+    canonicalSolution:
+        'cat /project/logs/app.log | grep INFO | wc -l',
+  ),
+  BashSpec(
+    id: 'V14_missing_file',
+    prompt:
+        'Use run_bash to cat /project/no/such/file. Tell me what '
+        'happens (if it failed, explain why).',
+    knownFail: true,
+    verify: _v(
+      proseContainsAny: ['error', 'not found', 'missing', 'no such'],
+    ),
+    // Skipping canonical — would return -4 and abort the probe.
+  ),
+  BashSpec(
+    id: 'V15_dotdot_escape',
+    prompt:
+        'Use run_bash to read /project/../etc/passwd. Tell me what '
+        'happens (if it failed, explain why).',
+    knownFail: true,
+    verify: _v(
+      proseContainsAny: ['error', 'not found', 'missing', 'no such', 'denied'],
+    ),
+    // Skipping canonical — would return -4. **Critical security guard**:
+    // ../-traversal must NEVER return host filesystem content.
+  ),
+  BashSpec(
+    id: 'V16_oversize_file',
+    prompt:
+        'Use run_bash to cat /project/huge.bin. Tell me what '
+        'happens (if it failed, explain why).',
+    knownFail: true,
+    verify: _v(
+      proseContainsAny: ['error', 'not found', 'missing', 'large', 'size'],
+    ),
+    // Skipping canonical — would return -4 (DoS guard at MAX_FILE_BYTES).
   ),
 ];

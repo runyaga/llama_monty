@@ -252,6 +252,22 @@ Future<void> main(List<String> args) async {
   final wasmBytes = File(_wasmPath).readAsBytesSync();
 
   // ---------------------------------------------------------------
+  // V-tier setup — write the mount fixture tree to a per-suite
+  // temp dir, then mountDir() onto /project. Survives every spec
+  // for the rest of the run; tear-down happens in the cleanup at
+  // end of main(). FFI-only; web throws UnsupportedError.
+  // ---------------------------------------------------------------
+  final mountRoot = Directory.systemTemp.createTempSync('llama-bash-vfs-');
+  for (final entry in vfsMountFixtures.entries) {
+    final f = File('${mountRoot.path}/${entry.key}');
+    f.parent.createSync(recursive: true);
+    f.writeAsStringSync(entry.value);
+  }
+  await wasmHost.mountDir(hostPath: mountRoot.path, vfsPath: '/project');
+  stdout.writeln('Mounted ${mountRoot.path} → /project '
+      '(${vfsMountFixtures.length} fixtures)');
+
+  // ---------------------------------------------------------------
   // Canonical-solution probe — runs each spec's `canonicalSolution`
   // against the live wasm host (no LLM). Catches fixture / runtime
   // drift before burning compute on a doomed bench.
@@ -296,6 +312,7 @@ Future<void> main(List<String> args) async {
     );
     await wasmHost.dispose();
     await engine.dispose();
+    mountRoot.deleteSync(recursive: true);
     exit(2);
   }
   stdout.writeln('canonical probe ok\n');
@@ -304,6 +321,7 @@ Future<void> main(List<String> args) async {
   if (args.contains('--probe-only')) {
     await wasmHost.dispose();
     await engine.dispose();
+    mountRoot.deleteSync(recursive: true);
     return;
   }
 
@@ -400,6 +418,7 @@ Future<void> main(List<String> args) async {
 
   await wasmHost.dispose();
   await engine.dispose();
+  mountRoot.deleteSync(recursive: true);
 }
 
 int _argInt(List<String> args, String flag, int fallback) {
