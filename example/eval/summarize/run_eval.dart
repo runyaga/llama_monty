@@ -25,6 +25,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show sqrt;
 
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
@@ -177,9 +178,37 @@ Future<FixtureScore> _runStrategy({
   );
 }
 
+/// Computes mean and population stdev (over a small N) of [xs].
+({double mean, double stdev, double min, double max}) _stats(List<double> xs) {
+  if (xs.isEmpty) return (mean: 0, stdev: 0, min: 0, max: 0);
+  final mean = xs.reduce((a, b) => a + b) / xs.length;
+  final variance = xs.fold<double>(0, (a, x) => a + (x - mean) * (x - mean)) /
+      xs.length;
+  final stdev = variance > 0 ? sqrt(variance) : 0.0;
+  return (
+    mean: mean,
+    stdev: stdev,
+    min: xs.reduce((a, b) => a < b ? a : b),
+    max: xs.reduce((a, b) => a > b ? a : b),
+  );
+}
+
+String _pct(double v) => '${(v * 100).toStringAsFixed(1)}%';
+
 Future<void> main(List<String> args) async {
   final verbose = args.contains('--verbose') || args.contains('-v');
   final positional = args.where((a) => !a.startsWith('-')).toList();
+  // Optional `--runs N` (default 1). Each fixture × strategy is summarized
+  // N times so we can report mean ± stdev and stop ranking from a single
+  // noisy sample at temp=1.0.
+  var runs = 1;
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '--runs' && i + 1 < args.length) {
+      runs = int.tryParse(args[i + 1]) ?? 1;
+    } else if (args[i].startsWith('--runs=')) {
+      runs = int.tryParse(args[i].substring('--runs='.length)) ?? 1;
+    }
+  }
   final glob = positional.isEmpty ? '' : positional.first;
 
   final dir = Directory(_fixturesDir);
@@ -209,6 +238,10 @@ Future<void> main(List<String> args) async {
   final baseline = ChatSummarizePipeline(engineRef: ref, oneShotThreshold: 999);
   final v2 = ChatSummarizePipeline(engineRef: ref, oneShotThreshold: 0);
 
+  stdout.writeln('Configuration: runs=$runs, sampling=temp=1.0/topP=0.95');
+
+  // perFixture[fixtureName][strategy] = list of FixtureScore over N runs.
+  final perFixture = <String, Map<String, List<FixtureScore>>>{};
   final scores = <FixtureScore>[];
   for (final f in files) {
     final fixture = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
@@ -221,56 +254,107 @@ Future<void> main(List<String> args) async {
         .toList();
 
     stdout.writeln('\n=== $name ===');
+    perFixture[name] = {'baseline': [], 'v2': []};
 
-    final base = await _runStrategy(
-      strategy: 'baseline',
-      fixtureName: name,
-      engine: engine,
-      ref: ref,
-      systemPrompt: systemPrompt,
-      turns: turns,
-      facts: facts,
-      doSummarize: (s) => baseline.runFromChatSession(s),
-    );
-    scores.add(base);
-    stdout.writeln(
-      '  baseline: recall=${(base.recall * 100).toStringAsFixed(1)}%  '
-      'neg=${(base.negationAcc * 100).toStringAsFixed(1)}%  '
-      'calls=${base.llmCalls}  ${base.wallMs}ms',
-    );
-    if (verbose) {
-      stdout.writeln('    --- baseline summary ---');
-      for (final l in base.summary.split('\n')) stdout.writeln('    $l');
-      stdout.writeln('    --- baseline post-reset reply ---');
-      for (final l in base.reply.split('\n')) stdout.writeln('    $l');
+    for (var run = 0; run < runs; run++) {
+      final base = await _runStrategy(
+        strategy: 'baseline',
+        fixtureName: name,
+        engine: engine,
+        ref: ref,
+        systemPrompt: systemPrompt,
+        turns: turns,
+        facts: facts,
+        doSummarize: (s) => baseline.runFromChatSession(s),
+      );
+      scores.add(base);
+      perFixture[name]!['baseline']!.add(base);
+      stdout.writeln(
+        '  [run ${run + 1}/$runs] baseline: recall=${_pct(base.recall)}  '
+        'neg=${_pct(base.negationAcc)}  '
+        'calls=${base.llmCalls}  ${base.wallMs}ms',
+      );
+
+      final v2score = await _runStrategy(
+        strategy: 'v2',
+        fixtureName: name,
+        engine: engine,
+        ref: ref,
+        systemPrompt: systemPrompt,
+        turns: turns,
+        facts: facts,
+        doSummarize: (s) => v2.runFromChatSession(s),
+      );
+      scores.add(v2score);
+      perFixture[name]!['v2']!.add(v2score);
+      stdout.writeln(
+        '  [run ${run + 1}/$runs] v2:       recall=${_pct(v2score.recall)}  '
+        'neg=${_pct(v2score.negationAcc)}  '
+        'calls=${v2score.llmCalls}  ${v2score.wallMs}ms',
+      );
     }
 
-    final v2score = await _runStrategy(
-      strategy: 'v2',
-      fixtureName: name,
-      engine: engine,
-      ref: ref,
-      systemPrompt: systemPrompt,
-      turns: turns,
-      facts: facts,
-      doSummarize: (s) => v2.runFromChatSession(s),
-    );
-    scores.add(v2score);
-    stdout.writeln(
-      '  v2:       recall=${(v2score.recall * 100).toStringAsFixed(1)}%  '
-      'neg=${(v2score.negationAcc * 100).toStringAsFixed(1)}%  '
-      'calls=${v2score.llmCalls}  ${v2score.wallMs}ms',
-    );
-    if (verbose) {
-      stdout.writeln('    --- v2 summary ---');
-      for (final l in v2score.summary.split('\n')) stdout.writeln('    $l');
-      stdout.writeln('    --- v2 post-reset reply ---');
-      for (final l in v2score.reply.split('\n')) stdout.writeln('    $l');
+    if (runs > 1) {
+      // Per-fixture stats summary line.
+      for (final strat in ['baseline', 'v2']) {
+        final s = perFixture[name]![strat]!;
+        final r = _stats(s.map((x) => x.recall).toList());
+        final n = _stats(s.map((x) => x.negationAcc).toList());
+        stdout.writeln(
+          '  ─ $strat × $runs: recall μ=${_pct(r.mean)} σ=${_pct(r.stdev)} '
+          'min=${_pct(r.min)} max=${_pct(r.max)}  '
+          'neg μ=${_pct(n.mean)} σ=${_pct(n.stdev)}',
+        );
+      }
+    }
+
+    if (verbose && runs == 1) {
+      // Verbose output is per-run; only useful with --runs=1.
+      for (final s in perFixture[name]!.values.expand((x) => x)) {
+        stdout.writeln('    --- ${s.strategy} summary ---');
+        for (final l in s.summary.split('\n')) stdout.writeln('    $l');
+        stdout.writeln('    --- ${s.strategy} post-reset reply ---');
+        for (final l in s.reply.split('\n')) stdout.writeln('    $l');
+      }
     }
   }
 
   // ---- Aggregate -----------------------------------------------------------
-  stdout.writeln('\n=== aggregate ===');
+  if (runs > 1) {
+    stdout.writeln('\n=== aggregate (mean of per-fixture means) ===');
+    for (final strat in ['baseline', 'v2']) {
+      // Per-fixture mean recall (each fixture contributes one number),
+      // then mean / stdev across fixtures.
+      final perFxRecall = perFixture.values
+          .map((m) =>
+              m[strat]!.map((s) => s.recall).reduce((a, b) => a + b) /
+              m[strat]!.length)
+          .toList();
+      final perFxNeg = perFixture.values
+          .map((m) =>
+              m[strat]!.map((s) => s.negationAcc).reduce((a, b) => a + b) /
+              m[strat]!.length)
+          .toList();
+      final r = _stats(perFxRecall);
+      final n = _stats(perFxNeg);
+      // Total cost is just the sum.
+      final calls = perFixture.values
+          .expand((m) => m[strat]!)
+          .map((s) => s.llmCalls)
+          .fold<int>(0, (a, b) => a + b);
+      final ms = perFixture.values
+          .expand((m) => m[strat]!)
+          .map((s) => s.wallMs)
+          .fold<int>(0, (a, b) => a + b);
+      stdout.writeln(
+        '  $strat:  recall μ=${_pct(r.mean)} σ=${_pct(r.stdev)}  '
+        'neg μ=${_pct(n.mean)} σ=${_pct(n.stdev)}  '
+        'calls=$calls  ${ms}ms',
+      );
+    }
+  }
+
+  stdout.writeln('\n=== aggregate (raw across all runs) ===');
   for (final strat in ['baseline', 'v2']) {
     final s = scores.where((x) => x.strategy == strat).toList();
     final recall = s.map((x) => x.recall).reduce((a, b) => a + b) / s.length;
