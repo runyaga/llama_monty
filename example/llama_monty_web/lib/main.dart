@@ -683,36 +683,15 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     // run_bash — wasmtime-spike's allow-listed shell over an in-memory
-    // VFS. Open the backend once and reuse for every call (cwd
-    // persists across run() calls, which is the whole point — agent
-    // can `cd /data` in one fence and `cat foo.txt` in the next).
-    // Bytes for wasm_guest.wasm and the dylib live under
-    // ~/dev/wasmtime-spike/; both must be built (cargo build +
-    // wasm32-wasip1 release) before launching the app on native.
-    // Web backend is bytes-only and works without the dylib.
-    try {
-      final wasmHost = await openBashHostOrNull();
-      if (wasmHost != null) {
-        final wasmBytes = await loadGuestWasmBytes();
-        final snapshot = await _snapshotLlamaTestForWasmVfs(sharedOs);
-        await wasmHost.loadTree(snapshot);
-        agentSession.register(
-          buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-        );
-        _wasmBashHost = wasmHost;
-        _appendChatLog(
-          'sys',
-          'run_bash registered (${snapshot.length} files in wasm VFS).',
-        );
-      } else {
-        _appendChatLog(
-          'sys',
-          'run_bash NOT registered — wasmtime-spike artifacts missing.',
-        );
-      }
-    } on Object catch (e) {
-      _appendChatLog('sys', 'run_bash registration failed: $e');
-    }
+    // VFS. Registration is fire-and-forget so model-load completion
+    // doesn't wait on the FFI dylib + VFS snapshot (those can each
+    // take a few seconds on cold cache). The model may invoke
+    // run_bash before the registration completes; in that case the
+    // host fn just isn't on the runtime yet and Monty raises a clean
+    // "unknown function" — same shape it'd raise for any other
+    // missing tool. By the time the user is typing the registration
+    // is well past done.
+    unawaited(_registerRunBashAsync(agentSession, sharedOs));
 
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
@@ -2110,6 +2089,40 @@ else:
   // -------------------------------------------------------------------------
 
   /// Walks well-known roots (`/tmp/llama-test/fixtures`, `/tmp/llama_monty*`) via Monty
+  /// Background task: opens the wasmtime-spike WasmHostBackend, loads
+  /// `wasm_guest.wasm`, snapshots `/tmp/llama-test/` into the VFS, and
+  /// registers the run_bash HostFunction on [agent]. Fire-and-forget
+  /// from `_loadModel` so the model-load doesn't wait on FFI + snapshot
+  /// (it's a few seconds on cold cache, was blocking the UI).
+  Future<void> _registerRunBashAsync(
+    MontyRuntime agent,
+    OsCallHandler os,
+  ) async {
+    try {
+      final wasmHost = await openBashHostOrNull();
+      if (wasmHost == null) {
+        _appendChatLog(
+          'sys',
+          'run_bash NOT registered — wasmtime-spike artifacts missing.',
+        );
+        return;
+      }
+      final wasmBytes = await loadGuestWasmBytes();
+      final snapshot = await _snapshotLlamaTestForWasmVfs(os);
+      await wasmHost.loadTree(snapshot);
+      agent.register(
+        buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
+      );
+      _wasmBashHost = wasmHost;
+      _appendChatLog(
+        'sys',
+        'run_bash registered (${snapshot.length} files in wasm VFS).',
+      );
+    } on Object catch (e) {
+      _appendChatLog('sys', 'run_bash registration failed: $e');
+    }
+  }
+
   /// pathlib and updates [_filesEntries]. Best-effort: silently no-ops if
   /// the runtime isn't ready yet.
   Future<void> _refreshFiles() async {
