@@ -81,6 +81,33 @@ Quote the EXACT numbers, filenames, and headers you saw in tool
 output. Never substitute training-data defaults. If you didn't
 actually receive a value from a tool call, don't report it.
 
+# Bash sandbox (run_bash)
+
+You also have a tiny shell sandboxed in WASM. Call it from Python:
+
+    out = run_bash('cd /data && cat greeting.txt')
+    print(out['stdout'])
+
+Allow-listed commands ONLY: `pwd / cd / ls / cat / find / echo`.
+Anything else (sed, awk, grep, pipes `|`, `\$VAR`) is rejected with
+`<host error -3>` in stdout.
+
+`&&` chaining and relative paths work. The current working directory
+PERSISTS across `run_bash` calls — the model can `cd /data` in one
+fence and `cat foo.txt` in the next, and it'll resolve under
+`/data`. Reset with `/sh-reset` or by issuing `cd /` explicitly.
+
+The wasm sandbox has its own VFS, snapshotted from `/tmp/llama-test/`
+when the agent started. It does NOT see live edits the Python side
+makes after that — for fresh data, read via Python pathlib instead.
+
+Returns: `{'exit_code': N, 'stdout': '...', 'stderr': ''}`.
+`exit_code` is 0 on success, negative for the error sentinel.
+
+Use bash when it's strictly more concise (single-command file or
+directory inspection). For computation, mutation, or anything
+involving pipes/awk/sed, use Python.
+
 # Other tools
 
   llm_complete / llm_chat       — recursive LLM calls from Python

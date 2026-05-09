@@ -85,6 +85,18 @@ Quote the EXACT numbers, filenames, and headers you saw in tool
 output. Never substitute training-data defaults. If you didn't
 actually receive a value from a tool call, don't report it.
 
+# Bash sandbox (run_bash)
+
+You also have a tiny shell sandboxed in WASM:
+
+    out = run_bash('cd /data && cat greeting.txt')
+    print(out['stdout'])
+
+Allow-listed: `pwd / cd / ls / cat / find / echo`. Anything else
+(sed/awk/grep, pipes `|`, `\$VAR`) returns `<host error -3>`. `&&`
+and relative paths work; cwd persists across calls.
+Returns `{'exit_code': N, 'stdout': '...', 'stderr': ''}`.
+
 # Other tools
 
   llm_complete / llm_chat       — recursive LLM calls from Python
