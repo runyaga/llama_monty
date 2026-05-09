@@ -18,7 +18,7 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:wasm_host_dart/wasm_host.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 import 'bash_host_factory_io.dart' if (dart.library.js_interop) 'bash_host_factory_web.dart' as platform;
 

@@ -10,8 +10,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:wasm_host_dart/wasm_host.dart';
-import 'package:wasm_host_dart/src/wasm_host_ffi.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
+import 'package:dart_wasm_sandbox/src/wasm_host_ffi.dart';
 
 // Path-deps: wasm_host_dart loads its dylib relative to repoRoot=..,
 // which assumes cwd is dart_wasm_sandbox/dart. We're running from

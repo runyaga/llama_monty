@@ -42,7 +42,7 @@ dependencies:
   # WasmHostBackend with a 6-command allow-listed shell over an
   # in-memory VFS. Path-dep until the package publishes; see
   # ~/.claude/plans/twinkling-imagining-reddy.md.
-  wasm_host_dart:
+  dart_wasm_sandbox:
     path: ../../../dart_wasm_sandbox/dart
 
 dev_dependencies:
@@ -65,6 +65,14 @@ dev_dependencies:
 flutter:
 
   uses-material-design: true
+
+  # wasm_guest.wasm is the dart_wasm_sandbox guest. Loaded by
+  # bash_host_factory_web.dart via rootBundle.load('assets/wasm_guest.wasm')
+  # so the chrome backend has bytes to run through WebAssembly.instantiate.
+  # Native (FFI) reads from the dart_wasm_sandbox build dir directly and
+  # ignores this asset.
+  assets:
+    - assets/wasm_guest.wasm
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
-import 'package:wasm_host_dart/wasm_host.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 import 'bash_host_factory.dart';
 

@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
-import 'package:wasm_host_dart/wasm_host.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 /// Builds a `run_bash(cmd: str) -> dict` HostFunction that the agent's
 /// Python code can call to execute an allow-listed shell command in

@@ -12,7 +12,7 @@ library;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:wasm_host_dart/wasm_host.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 const _wasmAssetKey = 'assets/wasm_guest.wasm';
 

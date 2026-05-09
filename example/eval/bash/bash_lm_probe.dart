@@ -14,8 +14,8 @@ import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_core/dart_monty_core.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
-import 'package:wasm_host_dart/src/wasm_host_ffi.dart';
-import 'package:wasm_host_dart/wasm_host.dart';
+import 'package:dart_wasm_sandbox/src/wasm_host_ffi.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 const _spikeRoot = '/Users/runyaga/dev/dart_wasm_sandbox';
