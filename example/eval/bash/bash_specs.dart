@@ -18,6 +18,7 @@ class BashSpec {
     required this.verify,
     this.maxTurns = 4,
     this.minTurns,
+    this.replicates,
     this.knownFail = false,
   });
   final String id;
@@ -31,6 +32,13 @@ class BashSpec {
   /// X-tier cross-turn specs to force the model to reason over a
   /// previous tool result before issuing the next call.
   final int? minTurns;
+
+  /// Per-spec replicate override. When set, the spec runs this many
+  /// times regardless of the CLI `--replicates` flag — useful for
+  /// flaky tiers (cross-turn, decomposition) that need higher N to
+  /// pin down the true pass rate at temp=1.0. When null, the CLI
+  /// default applies.
+  final int? replicates;
 
   final bool knownFail;
 }
@@ -588,6 +596,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     ),
     minTurns: 2,
     maxTurns: 6,
+    replicates: 5,
   ),
   BashSpec(
     id: 'X02_iterative_refinement',
@@ -604,6 +613,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     ),
     minTurns: 2,
     maxTurns: 6,
+    replicates: 5,
   ),
   BashSpec(
     id: 'X03_count_then_extract_first',
@@ -618,6 +628,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     ),
     minTurns: 2,
     maxTurns: 6,
+    replicates: 5,
   ),
   BashSpec(
     id: 'X04_explore_two_dirs',
@@ -634,5 +645,6 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     ),
     minTurns: 2,
     maxTurns: 6,
+    replicates: 5,
   ),
 ];

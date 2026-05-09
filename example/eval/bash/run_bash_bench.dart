@@ -243,13 +243,34 @@ Future<void> main(List<String> args) async {
   // chat session; the spec is "passed" if at least majority of
   // replicates pass.
   final replicates = _argInt(args, '--replicates', 3);
-  stdout.writeln('Replicates per spec: $replicates');
+  final onlyArg = _argString(args, '--only');
+  final onlySet = onlyArg?.split(',').map((s) => s.trim()).toSet();
+  final specs = onlySet == null
+      ? bashSpecs
+      : bashSpecs
+          .where(
+            (s) =>
+                onlySet.contains(s.id) ||
+                onlySet.any(
+                  (prefix) => s.id.startsWith('$prefix') || s.id.startsWith('${prefix}_'),
+                ),
+          )
+          .toList();
+  if (specs.isEmpty) {
+    stderr.writeln('No specs matched --only=$onlyArg');
+    exit(2);
+  }
+  stdout.writeln(
+    'Replicates per spec: $replicates · running ${specs.length} of '
+    '${bashSpecs.length} specs',
+  );
 
   final perSpec = <String, List<BashResult>>{};
-  for (final tc in bashSpecs) {
+  for (final tc in specs) {
+    final specReps = tc.replicates ?? replicates;
     final reps = <BashResult>[];
-    for (var i = 1; i <= replicates; i++) {
-      stdout.writeln('\n========= ${tc.id} (rep $i/$replicates) =========');
+    for (var i = 1; i <= specReps; i++) {
+      stdout.writeln('\n========= ${tc.id} (rep $i/$specReps) =========');
       final result = await _runOne(
         engine: engine,
         wasmHost: wasmHost,
@@ -276,10 +297,11 @@ Future<void> main(List<String> args) async {
   var totalPassed = 0;
   var totalUnexpectedFail = 0;
   var totalKnownFail = 0;
-  for (final tc in bashSpecs) {
+  for (final tc in specs) {
     final reps = perSpec[tc.id]!;
+    final specReps = tc.replicates ?? replicates;
     final passes = reps.where((r) => r.passed).length;
-    final pass = passes >= (replicates / 2).ceil();
+    final pass = passes >= (specReps / 2).ceil();
     final isKnownFail = tc.knownFail;
     final mark = pass
         ? '✓'
@@ -287,10 +309,10 @@ Future<void> main(List<String> args) async {
             ? '△'
             : '✗';
     final avgTurns = reps.map((r) => r.turns).reduce((a, b) => a + b) /
-        replicates;
+        specReps;
     stdout.writeln(
       '$mark ${tc.id.padRight(34)} '
-      '$passes/$replicates  '
+      '$passes/$specReps  '
       'avg-turns=${avgTurns.toStringAsFixed(1)}',
     );
     if (pass) {
@@ -303,7 +325,7 @@ Future<void> main(List<String> args) async {
   }
   stdout.writeln(
     '\n$totalPassed PASS · $totalUnexpectedFail FAIL · '
-    '$totalKnownFail △ known-fail (of ${bashSpecs.length}) '
+    '$totalKnownFail △ known-fail (of ${specs.length}) '
     '@ N=$replicates replicates',
   );
 
@@ -315,4 +337,10 @@ int _argInt(List<String> args, String flag, int fallback) {
   final i = args.indexOf(flag);
   if (i == -1 || i + 1 >= args.length) return fallback;
   return int.tryParse(args[i + 1]) ?? fallback;
+}
+
+String? _argString(List<String> args, String flag) {
+  final i = args.indexOf(flag);
+  if (i == -1 || i + 1 >= args.length) return null;
+  return args[i + 1];
 }
