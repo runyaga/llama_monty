@@ -818,6 +818,12 @@ else:
         : passed
             ? '✓'
             : '✗';
+    if (!passed) {
+      // Dump the per-turn transcript on failure so we can see exactly
+      // what the model wrote and where it diverged.
+      stdout.writeln(result.transcript);
+      stdout.writeln('  finalProse: "${_truncate(result.finalProse, 200)}"');
+    }
     stdout.writeln(
       'result: $mark ${passed ? 'PASS' : 'FAIL'} '
       '(turns=${result.turns}, retries=${result.retries}) — $reason'
