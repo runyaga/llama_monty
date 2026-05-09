@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:dart_monty/dart_monty.dart' show DartMonty;
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_core/dart_monty_core.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:llama_monty/llama_monty.dart';
@@ -1606,6 +1607,68 @@ print(json.dumps(out))
     }
   }
 
+  /// Writes [content] to `/fixtures/<filename>` via Monty's pathlib.
+  /// Used by both the file-picker upload and the drop-target. Refreshes
+  /// the panel after the write so the new file shows up immediately.
+  Future<bool> _addFileBytes({
+    required String filename,
+    required String content,
+  }) async {
+    final agent = _agentSession;
+    if (agent == null) return false;
+    final safeName = filename
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    final target = '/fixtures/${safeName.isEmpty ? "file.txt" : safeName}';
+    final escaped = jsonEncode(content);
+    final r = await agent.execute('''
+from pathlib import Path
+Path('/fixtures').mkdir(parents=True, exist_ok=True)
+Path(${jsonEncode(target)}).write_text($escaped)
+print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
+''').result;
+    if (r.error != null) {
+      _appendChatLog('error', 'Add file failed: ${r.error!.message}');
+      return false;
+    }
+    _appendChatLog('sys', (r.printOutput ?? '').trim());
+    await _refreshFiles();
+    // Auto-open the file we just added.
+    await _viewFile(target);
+    return true;
+  }
+
+  /// Opens the OS file picker, reads each selected file as text, and
+  /// writes them into `/fixtures/`. Binary files are silently skipped
+  /// (they'd come through as non-UTF8 strings and Monty's text writer
+  /// would reject them).
+  Future<void> _pickAndAddFiles() async {
+    if (_filesBusy) return;
+    setState(() => _filesBusy = true);
+    try {
+      final files = await openFiles();
+      if (files.isEmpty) return;
+      var added = 0;
+      for (final f in files) {
+        try {
+          // Read as bytes then decode as UTF-8 — file_selector's
+          // .readAsString() doesn't work on web for some types.
+          final bytes = await f.readAsBytes();
+          final text = utf8.decode(bytes, allowMalformed: false);
+          final ok = await _addFileBytes(filename: f.name, content: text);
+          if (ok) added++;
+        } catch (_) {
+          _appendChatLog('error', 'Skipped non-text file: ${f.name}');
+        }
+      }
+      if (added > 0) {
+        _appendChatLog('sys', 'Added $added file(s) to /fixtures/');
+      }
+    } finally {
+      setState(() => _filesBusy = false);
+    }
+  }
+
   /// Reads [path] via Monty and stores the result so the panel can render
   /// it inline. Caller is responsible for the active-tab UX.
   Future<void> _viewFile(String path) async {
@@ -1629,40 +1692,51 @@ print(json.dumps(out))
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          color: cs.surfaceContainerHigh,
-          child: Row(
-            children: [
-              const Icon(Icons.folder, size: 14),
-              const SizedBox(width: 6),
-              const Text(
-                'Files',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '(${_filesEntries.where((e) => e.isFile).length} files)',
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-              const Spacer(),
-              if (_filesBusy)
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                color: cs.surfaceContainerHigh,
+                child: Row(
+                  children: [
+                    const Icon(Icons.folder, size: 14),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Files',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '(${_filesEntries.where((e) => e.isFile).length} files)',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                    const Spacer(),
+                    if (_filesBusy)
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed:
+                          ready && !_filesBusy ? _pickAndAddFiles : null,
+                      icon: const Icon(Icons.upload_file, size: 14),
+                      label: const Text('Add', style: TextStyle(fontSize: 11)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        minimumSize: const Size(50, 24),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    TextButton(
+                      onPressed: ready && !_filesBusy ? _refreshFiles : null,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(50, 24),
+                      ),
+                      child: const Text('Refresh', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
                 ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: ready && !_filesBusy ? _refreshFiles : null,
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(40, 24),
-                ),
-                child: const Text('Refresh', style: TextStyle(fontSize: 11)),
               ),
-            ],
-          ),
-        ),
         Expanded(
           child: _filesEntries.isEmpty
               ? Center(

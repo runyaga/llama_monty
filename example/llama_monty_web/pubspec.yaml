@@ -32,6 +32,8 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  file_selector: ^1.0.3
+  flutter_markdown: ^0.7.7+1
   llamadart: ^0.6.11
   llama_monty:
     path: ../..
