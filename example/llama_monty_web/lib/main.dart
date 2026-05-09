@@ -511,6 +511,37 @@ class _ChatPageState extends State<ChatPage> {
       ],
     ),
     (
+      // Mirrors example/eval/bash/run_bash_bench.dart's representative
+      // specs. The wasm sandbox has its own VFS pre-loaded with
+      // /notes.txt, /data/greeting.txt, /data/numbers.txt — different
+      // from /tmp/llama-test/. cwd persists across run_bash calls so
+      // the agent can navigate. Allow-listed: pwd / cd / ls / cat /
+      // find / echo. Anything else returns `<host error -3>`.
+      name: 'Bash Programs',
+      description:
+          'Drive the wasmtime-spike shell sandbox via run_bash. '
+          '6 allow-listed commands + && chaining + persistent cwd. '
+          'Composes with Python: bash for text/file inspection, '
+          'Python for parsing and computation.',
+      prompts: [
+        // Trivial echo — proves the wiring at all.
+        "Use run_bash to print 'hello' via echo. Tell me what it printed.",
+        // File read with cd.
+        'Use run_bash with `cd /data && cat greeting.txt` and tell me '
+            'the greeting.',
+        // Multi-step navigation (cwd persists across run_bash calls).
+        'Use run_bash TWICE in one fence: first `cd /data`, then `pwd` '
+            'in a separate run_bash call. Tell me what pwd printed.',
+        // Combined Python + bash — bash output, Python parses.
+        'Use run_bash to cat /data/numbers.txt, then in the SAME fence '
+            'use Python to parse the stdout (split lines, int() each) '
+            'and print the sum.',
+        // Discovery via find.
+        'Use run_bash to find every path under /. List the paths in '
+            'your prose answer.',
+      ],
+    ),
+    (
       name: 'File Workflows',
       description:
           'Files / state / multi-step on disk. Replaces the older '
@@ -1306,8 +1337,17 @@ else:
                 '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
                 '  /history             dump the current chat_history()\n'
                 '  /files [path]        list files under /tmp/llama-test/fixtures (or any path)\n'
+                '  /sh-reset            reset the bash shell session (cwd back to /)\n'
                 '  /help                this list',
           );
+        case '/sh-reset':
+          final host = _wasmBashHost;
+          if (host == null) {
+            _appendChatLog('sys', 'no run_bash registered; nothing to reset');
+          } else {
+            await host.resetSession();
+            _appendChatLog('sys', 'shell session reset (cwd → /)');
+          }
         case '/summarize':
           _appendChatLog('tool', 'chat_summarize_v2 (multi-step pipeline)');
           final r = await agent.execute('print(chat_summarize_v2())').result;
