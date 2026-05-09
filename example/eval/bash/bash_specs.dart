@@ -28,30 +28,75 @@ class BashSpec {
 
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
-final Map<String, Uint8List> bashVfs = {
-  // Original small fixtures — kept for backwards-compat with B-tier specs.
-  '/tmp/llama-test/fixtures/notes.txt':
-      _b('todo:\n  - finish the demo\n  - profit\n'),
-  '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
-  '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
-  '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
-  // Larger fixtures for the A-tier (advanced pipes) and M-tier
-  // (multi-turn). Hand-picked so every assertion has an exact answer:
-  //
-  //   scores.txt (9 nums):  max = 99, distinct count = 7, sum = 193
-  //   big.log (8 lines):    INFO=4, ERROR=3, WARN=1, INFO-distinct=3
-  '/tmp/llama-test/fixtures/scores.txt': _b('5\n12\n3\n99\n42\n7\n5\n12\n8\n'),
-  '/tmp/llama-test/state/big.log': _b(
-    '[INFO] boot\n'
-    '[ERROR] auth\n'
-    '[INFO] ready\n'
-    '[ERROR] timeout\n'
-    '[WARN] mem\n'
-    '[INFO] tick\n'
-    '[ERROR] db\n'
-    '[INFO] tick\n',
-  ),
-};
+final Map<String, Uint8List> bashVfs = _buildVfs();
+
+Map<String, Uint8List> _buildVfs() => {
+      // Original small fixtures (B-tier — basics, navigation, multi-call).
+      '/tmp/llama-test/fixtures/notes.txt':
+          _b('todo:\n  - finish the demo\n  - profit\n'),
+      '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
+      '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
+      '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
+      // Larger fixtures (A-tier advanced pipes, S-tier sophistication,
+      // D-tier decomposition, M-tier multi-turn).
+      //
+      //   scores.txt (30 nums, 15 distinct):
+      //     distinct = {12, 17, 23, 28, 34, 41, 49, 56, 63, 71, 78, 84, 91, 96, 99}
+      //     each repeated twice
+      //     min = 12, max = 99, sum = 1684, distinct count = 15
+      //
+      //   big.log (50 lines, 5 cycles × 10):
+      //     INFO=20 (4 distinct), ERROR=15 (3 distinct),
+      //     WARN=10 (2 distinct), DEBUG=5 (1 distinct)
+      //     non-DEBUG = 45, total distinct = 10
+      //     first ERROR = "[ERROR] auth failed"
+      //
+      //   configs/v1.txt vs configs/v2.txt (5 lines each):
+      //     differ on exactly one line ("gamma" vs "GAMMA")
+      '/tmp/llama-test/fixtures/scores.txt': _b(_buildScores()),
+      '/tmp/llama-test/state/big.log': _b(_buildBigLog()),
+      '/tmp/llama-test/configs/v1.txt':
+          _b('alpha\nbeta\ngamma\ndelta\nepsilon\n'),
+      '/tmp/llama-test/configs/v2.txt':
+          _b('alpha\nbeta\nGAMMA\ndelta\nepsilon\n'),
+    };
+
+const List<int> _scoreDistinct = [
+  12, 17, 23, 28, 34, 41, 49, 56, 63, 71, 78, 84, 91, 96, 99,
+];
+
+String _buildScores() {
+  final buf = StringBuffer();
+  for (final n in _scoreDistinct) {
+    buf
+      ..writeln(n)
+      ..writeln(n);
+  }
+  return buf.toString();
+}
+
+const List<String> _logCycle = [
+  '[INFO] boot',
+  '[ERROR] auth failed',
+  '[INFO] cache miss',
+  '[WARN] memory',
+  '[INFO] request received',
+  '[ERROR] timeout',
+  '[INFO] response sent',
+  '[DEBUG] heartbeat',
+  '[ERROR] db error',
+  '[WARN] disk',
+];
+
+String _buildBigLog() {
+  final buf = StringBuffer();
+  for (var i = 0; i < 5; i++) {
+    for (final line in _logCycle) {
+      buf.writeln(line);
+    }
+  }
+  return buf.toString();
+}
 
 BashVerify _v({
   Iterable<String>? stdoutContainsAll,
@@ -251,44 +296,11 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     maxTurns: 6,
   ),
 
-  // Tier 6 — combined evals: Python + bash composition (3)
-  BashSpec(
-    id: 'C01_bash_then_python_sum',
-    prompt:
-        'Use run_bash to cat /tmp/llama-test/fixtures/numbers.txt, then '
-        "in the SAME fence use Python to parse the stdout (split lines, "
-        'int() each) and print the sum.',
-    verify: _v(
-      fenceContains: 'run_bash',
-      stdoutContainsAll: ['48'], // 1 + 2 + 3 + 42 = 48
-      proseContainsAll: ['48'],
-    ),
-    maxTurns: 5,
-  ),
-  BashSpec(
-    id: 'C02_bash_find_then_python_count',
-    prompt:
-        'Use run_bash with `find /` to list every path, then in the SAME '
-        'fence use Python to count how many lines stdout had. Tell me '
-        'the count.',
-    verify: _v(
-      fenceContains: 'run_bash',
-      proseContainsAny: ['4', '5', '6', '7', '8'],
-    ),
-    maxTurns: 5,
-  ),
-  BashSpec(
-    id: 'C03_python_value_via_bash_echo',
-    prompt:
-        'In Python, compute 7 * 8. Then use run_bash to echo the result. '
-        'Tell me what bash printed.',
-    verify: _v(
-      fenceContains: 'run_bash',
-      stdoutContainsAll: ['56'],
-      proseContainsAll: ['56'],
-    ),
-    maxTurns: 5,
-  ),
+  // Tier 6 — Python + bash composition. Dropped 2026-05-09 — these
+  // diluted the signal (model overshot into `cat | python -c ...`
+  // chains), and dart_wasm_sandbox doesn't / won't support python
+  // inside the shell. The fence is still Python; it just shouldn't
+  // be the bench's measurement target. C01-C03 archived in git.
 
   // Tier 7 — known-fail / disallowed (2)
   // Phase A1 added wc/grep/head/tail to the allow-list, so the
@@ -331,8 +343,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
         '/tmp/llama-test/state/big.log. Hint: cat | grep | wc -l.',
     verify: _v(
       fenceContains: '|',
-      stdoutContainsAll: ['4'],
-      proseContainsAll: ['4'],
+      stdoutContainsAll: ['20'],
+      proseContainsAll: ['20'],
     ),
     maxTurns: 4,
   ),
@@ -355,8 +367,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
         '/tmp/llama-test/fixtures/scores.txt. Hint: sort -u | wc -l.',
     verify: _v(
       fenceContains: '|',
-      stdoutContainsAll: ['7'],
-      proseContainsAll: ['7'],
+      stdoutContainsAll: ['15'],
+      proseContainsAll: ['15'],
     ),
     maxTurns: 4,
   ),
@@ -368,8 +380,8 @@ final List<BashSpec> bashSpecs = <BashSpec>[
         'Hint: cat | grep INFO | sort -u | wc -l.',
     verify: _v(
       fenceContains: '|',
-      stdoutContainsAll: ['3'],
-      proseContainsAll: ['3'],
+      stdoutContainsAll: ['4'],
+      proseContainsAll: ['4'],
     ),
     maxTurns: 4,
   ),
@@ -397,7 +409,7 @@ final List<BashSpec> bashSpecs = <BashSpec>[
         'multiple run_bash calls or pipes. Tell me the three counts.',
     verify: _v(
       fenceContains: 'run_bash',
-      proseContainsAll: ['4', '3', '1'],
+      proseContainsAll: ['20', '15', '10'],
     ),
     maxTurns: 5,
   ),
@@ -415,5 +427,135 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     verify: _v(
       proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
     ),
+  ),
+
+  // Tier 11 — sophisticated single-fence pipes (S-tier, post-N3).
+  //
+  // Exercises the richer surface (pipes + sort + grep + wc + head)
+  // against the larger 50-line big.log and 30-num scores.txt. Every
+  // verify has a hand-checked unique-substring answer.
+  BashSpec(
+    id: 'S01_non_debug_count',
+    prompt:
+        'Use run_bash with a pipe to count how many lines in '
+        '/tmp/llama-test/state/big.log are NOT DEBUG lines. '
+        'Hint: cat | grep -v DEBUG | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['45'],
+      proseContainsAll: ['45'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'S02_first_error',
+    prompt:
+        'Use run_bash to print just the FIRST ERROR line in '
+        '/tmp/llama-test/state/big.log. '
+        'Hint: cat | grep ERROR | head -n 1.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['auth failed'],
+      proseContainsAny: ['auth failed', 'auth'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'S03_smallest_score',
+    prompt:
+        'Use run_bash to print the SMALLEST number in '
+        '/tmp/llama-test/fixtures/scores.txt. '
+        'Hint: cat | sort -n | head -n 1.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['12'],
+      proseContainsAll: ['12'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'S04_total_distinct_lines',
+    prompt:
+        'Use run_bash with a pipe to count how many DISTINCT lines '
+        '(any severity) are in /tmp/llama-test/state/big.log. '
+        'Hint: sort -u | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['10'],
+      proseContainsAll: ['10'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'S05_count_specific_message',
+    prompt:
+        'Use run_bash to count how many "timeout" lines are in '
+        '/tmp/llama-test/state/big.log. '
+        'Hint: cat | grep timeout | wc -l, or grep -c.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      stdoutContainsAll: ['5'],
+      proseContainsAll: ['5'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'S06_distinct_severities_via_grep',
+    prompt:
+        'Use run_bash to confirm that /tmp/llama-test/state/big.log '
+        'contains four severity tags: INFO, ERROR, WARN, DEBUG. '
+        'For each tag, tell me whether at least one line has it. '
+        'Hint: four `grep -c` calls (one per tag).',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAll: ['INFO', 'ERROR', 'WARN', 'DEBUG'],
+    ),
+    maxTurns: 5,
+  ),
+
+  // Tier 12 — decomposition (D-tier). Tasks that need 2-3 dependent
+  // run_bash calls + LLM reasoning over previous output. Tests the
+  // multi-turn agent loop, not just shell composition.
+  BashSpec(
+    id: 'D01_largest_logfile',
+    prompt:
+        'Use run_bash to find the .log file under '
+        '/tmp/llama-test/state with the MOST lines. Tell me the '
+        'filename and the line count. Hint: `wc -l file1 file2 ...`'
+        ' returns counts plus a total.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAll: ['big.log', '50'],
+    ),
+    maxTurns: 6,
+  ),
+  BashSpec(
+    id: 'D02_first_error_message_text',
+    prompt:
+        'Read /tmp/llama-test/state/big.log and tell me the message '
+        'text (without the [ERROR] tag) of the FIRST ERROR line. '
+        'You may use any combination of run_bash calls.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAny: ['auth failed', 'auth'],
+    ),
+    maxTurns: 6,
+  ),
+  // Diff-detect: model has to compare two near-identical files
+  // WITHOUT a `diff` command. Strategy is open — cat both, eyeball
+  // in prose; or sort -u and reason; or grep one against the other.
+  // Verifies the model can compose under a tool gap.
+  BashSpec(
+    id: 'D03_diff_files_no_diff',
+    prompt:
+        '/tmp/llama-test/configs/v1.txt and v2.txt are nearly '
+        "identical except for ONE line. Find which line differs. "
+        "You don't have a `diff` command — figure it out using only "
+        'run_bash and reasoning. Tell me the differing line(s).',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAny: ['gamma', 'GAMMA', 'line 3'],
+    ),
+    maxTurns: 6,
   ),
 ];

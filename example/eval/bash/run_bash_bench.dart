@@ -195,7 +195,7 @@ int _countAssistantTurns(String transcript) =>
 // Main
 // ---------------------------------------------------------------------------
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   if (!File(_dylibPath).existsSync()) {
     stderr.writeln('libwasm_host.dylib not built at $_dylibPath');
     exit(2);
@@ -221,49 +221,82 @@ Future<void> main() async {
     buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
   );
 
-  final results = <BashResult>[];
+  // Per-spec replicate sweep so single-run flakes become statistical
+  // signal. Each spec runs N times against a fresh wasm session +
+  // chat session; the spec is "passed" if at least majority of
+  // replicates pass.
+  final replicates = _argInt(args, '--replicates', 3);
+  stdout.writeln('Replicates per spec: $replicates');
+
+  final perSpec = <String, List<BashResult>>{};
   for (final tc in bashSpecs) {
-    stdout.writeln('\n========= ${tc.id} =========');
-    final result = await _runOne(
-      engine: engine,
-      monty: monty,
-      wasmHost: wasmHost,
-      tc: tc,
-    );
-    // Always dump transcript so every run_bash literal is captured.
-    stdout.writeln(result.transcript);
-    final mark = !result.passed && result.knownFail
-        ? '△'
-        : result.passed
-            ? '✓'
-            : '✗';
-    stdout.writeln(
-      'result: $mark ${result.passed ? 'PASS' : 'FAIL'} '
-      '(turns=${result.turns}) — ${result.reason}'
-      '${result.knownFail && !result.passed ? ' [known-fail]' : ''}',
-    );
-    results.add(result);
+    final reps = <BashResult>[];
+    for (var i = 1; i <= replicates; i++) {
+      stdout.writeln('\n========= ${tc.id} (rep $i/$replicates) =========');
+      final result = await _runOne(
+        engine: engine,
+        monty: monty,
+        wasmHost: wasmHost,
+        tc: tc,
+      );
+      stdout.writeln(result.transcript);
+      final mark = !result.passed && result.knownFail
+          ? '△'
+          : result.passed
+              ? '✓'
+              : '✗';
+      stdout.writeln(
+        'result: $mark ${result.passed ? 'PASS' : 'FAIL'} '
+        '(turns=${result.turns}) — ${result.reason}'
+        '${result.knownFail && !result.passed ? ' [known-fail]' : ''}',
+      );
+      reps.add(result);
+    }
+    perSpec[tc.id] = reps;
   }
 
   stdout.writeln('\n========= summary =========');
-  for (final r in results) {
-    final mark = !r.passed && r.knownFail
-        ? '△'
-        : r.passed
-            ? '✓'
+  var totalPassed = 0;
+  var totalUnexpectedFail = 0;
+  var totalKnownFail = 0;
+  for (final tc in bashSpecs) {
+    final reps = perSpec[tc.id]!;
+    final passes = reps.where((r) => r.passed).length;
+    final pass = passes >= (replicates / 2).ceil();
+    final isKnownFail = tc.knownFail;
+    final mark = pass
+        ? '✓'
+        : isKnownFail
+            ? '△'
             : '✗';
-    stdout.writeln('$mark ${r.id.padRight(34)} turns=${r.turns} — ${r.reason}');
+    final avgTurns = reps.map((r) => r.turns).reduce((a, b) => a + b) /
+        replicates;
+    stdout.writeln(
+      '$mark ${tc.id.padRight(34)} '
+      '$passes/$replicates  '
+      'avg-turns=${avgTurns.toStringAsFixed(1)}',
+    );
+    if (pass) {
+      totalPassed++;
+    } else if (isKnownFail) {
+      totalKnownFail++;
+    } else {
+      totalUnexpectedFail++;
+    }
   }
-  final passed = results.where((r) => r.passed).length;
-  final unexpectedFail =
-      results.where((r) => !r.passed && !r.knownFail).length;
-  final knownFail = results.where((r) => !r.passed && r.knownFail).length;
   stdout.writeln(
-    '\n$passed PASS · $unexpectedFail FAIL · $knownFail △ known-fail '
-    '(of ${results.length})',
+    '\n$totalPassed PASS · $totalUnexpectedFail FAIL · '
+    '$totalKnownFail △ known-fail (of ${bashSpecs.length}) '
+    '@ N=$replicates replicates',
   );
 
   await wasmHost.dispose();
   await monty.dispose();
   await engine.dispose();
+}
+
+int _argInt(List<String> args, String flag, int fallback) {
+  final i = args.indexOf(flag);
+  if (i == -1 || i + 1 >= args.length) return fallback;
+  return int.tryParse(args[i + 1]) ?? fallback;
 }
