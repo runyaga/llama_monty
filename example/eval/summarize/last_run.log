@@ -1,45 +1,45 @@
 Running build hooks...Running build hooks...Loading model …
 
 === F10 — mixed proper nouns (non-Latin / hyphenated, document failure) ===
-  baseline: recall=50.0%  neg=100.0%  calls=1  3460ms
-  v2:       recall=100.0%  neg=100.0%  calls=4  21523ms
+  baseline: recall=50.0%  neg=100.0%  calls=1  2871ms
+  v2:       recall=0.0%  neg=100.0%  calls=4  16234ms
 
 === F1 — short coherent (basic intro) ===
-  baseline: recall=100.0%  neg=100.0%  calls=1  3811ms
-  v2:       recall=0.0%  neg=100.0%  calls=3  15504ms
+  baseline: recall=33.3%  neg=100.0%  calls=1  3164ms
+  v2:       recall=66.7%  neg=100.0%  calls=3  9698ms
 
 === F2 — short coherent (preferences) ===
-  baseline: recall=100.0%  neg=100.0%  calls=1  3563ms
-  v2:       recall=50.0%  neg=100.0%  calls=3  15167ms
+  baseline: recall=100.0%  neg=100.0%  calls=1  3281ms
+  v2:       recall=75.0%  neg=100.0%  calls=3  11496ms
 
 === F3 — short coherent (work context) ===
-  baseline: recall=100.0%  neg=100.0%  calls=1  3130ms
-  v2:       recall=100.0%  neg=100.0%  calls=3  13955ms
+  baseline: recall=100.0%  neg=100.0%  calls=1  3089ms
+  v2:       recall=60.0%  neg=100.0%  calls=3  11653ms
 
 === F4 — long coherent (single-topic, attention-drift test) ===
-  baseline: recall=0.0%  neg=100.0%  calls=1  4757ms
-  v2:       recall=0.0%  neg=100.0%  calls=7  119760ms
+  baseline: recall=76.9%  neg=100.0%  calls=1  5649ms
+  v2:       recall=92.3%  neg=100.0%  calls=7  42282ms
 
 === F5 — long coherent (debugging session) ===
-  baseline: recall=10.0%  neg=100.0%  calls=1  6193ms
-  v2:       recall=40.0%  neg=100.0%  calls=7  68734ms
+  baseline: recall=20.0%  neg=100.0%  calls=1  4493ms
+  v2:       recall=60.0%  neg=100.0%  calls=7  42398ms
 
 === F6 — long coherent (recipe planning) ===
-  baseline: recall=70.0%  neg=100.0%  calls=1  6274ms
-  v2:       recall=60.0%  neg=100.0%  calls=5  36616ms
+  baseline: recall=90.0%  neg=100.0%  calls=1  3736ms
+  v2:       recall=20.0%  neg=100.0%  calls=5  27907ms
 
 === F7 — topic switch midway (early facts must survive) ===
-  baseline: recall=40.0%  neg=100.0%  calls=1  3779ms
-  v2:       recall=50.0%  neg=100.0%  calls=4  19658ms
+  baseline: recall=40.0%  neg=100.0%  calls=1  4142ms
+  v2:       recall=90.0%  neg=100.0%  calls=4  18590ms
 
 === F8 — explicit negations (the 2B failure mode) ===
-  baseline: recall=14.3%  neg=20.0%  calls=1  2683ms
-  v2:       recall=100.0%  neg=100.0%  calls=7  33641ms
+  baseline: recall=100.0%  neg=100.0%  calls=1  3309ms
+  v2:       recall=100.0%  neg=100.0%  calls=5  20615ms
 
 === F9 — numeric / date facts (hallucination-prone) ===
-  baseline: recall=87.5%  neg=100.0%  calls=1  4432ms
-  v2:       recall=100.0%  neg=100.0%  calls=4  20021ms
+  baseline: recall=100.0%  neg=100.0%  calls=1  4449ms
+  v2:       recall=87.5%  neg=100.0%  calls=4  20957ms
 
 === aggregate ===
-  baseline: recall=57.2%  neg=92.0%  calls=10  42082ms
-  v2: recall=60.0%  neg=100.0%  calls=47  364579ms
+  baseline: recall=71.0%  neg=100.0%  calls=10  38183ms
+  v2: recall=65.1%  neg=100.0%  calls=45  221830ms

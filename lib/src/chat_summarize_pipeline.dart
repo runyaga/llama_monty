@@ -168,6 +168,10 @@ class ChatSummarizePipeline {
       '- polarity is "affirm" or "negate". Use "negate" for "is not", '
       '"never", "won\'t", "do not", etc.\n'
       '- Each fact is one (subject, predicate, object) triple.\n'
+      '- ALWAYS extract the user\'s name as a fact when they introduce '
+      'themselves (subject = the name, predicate = "name", object = the '
+      'name as said). Use the name (not "the user") as the subject for '
+      'every subsequent fact about that person.\n'
       '- decisions captures what was committed to.\n'
       '- open_questions captures what was raised but not answered.\n'
       '- If nothing applies, use empty arrays.';
@@ -296,10 +300,14 @@ class ChatSummarizePipeline {
       LlamaChatMessage.fromText(
         role: LlamaChatRole.system,
         text:
-            'You compress conversations into a $style. Capture facts, open '
-            'questions, decisions, tool results, and any state the next '
-            'turn must remember. Keep it short — half the length of the '
-            'input or less. Reply with the summary only, no preamble.',
+            'You compress conversations into a $style. Capture every concrete '
+            'fact, open question, decision, tool result, and any state the '
+            'next turn must remember.\n\n'
+            'CRITICAL: always preserve the user\'s name and identifying '
+            'details (e.g. "Priya is planning…") — never paraphrase the user '
+            'out by saying "the user" if a name was given.\n\n'
+            'Keep it short — half the length of the input or less. Reply '
+            'with the summary only, no preamble.',
       ),
       LlamaChatMessage.fromText(
         role: LlamaChatRole.user,

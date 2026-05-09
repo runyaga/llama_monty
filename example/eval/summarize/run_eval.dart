@@ -178,7 +178,9 @@ Future<FixtureScore> _runStrategy({
 }
 
 Future<void> main(List<String> args) async {
-  final glob = args.isEmpty ? '' : args.first;
+  final verbose = args.contains('--verbose') || args.contains('-v');
+  final positional = args.where((a) => !a.startsWith('-')).toList();
+  final glob = positional.isEmpty ? '' : positional.first;
 
   final dir = Directory(_fixturesDir);
   final files = dir
@@ -197,7 +199,11 @@ Future<void> main(List<String> args) async {
   stdout.writeln('Loading model …');
   final engine = LlamaEngine(LlamaBackend());
   await engine.loadModel(_modelPath, modelParams: ModelParams(contextSize: 8192));
-  final ref = LlamaEngineRef(engine);
+  // Google's recommended sampling for Gemma 4: temp=1.0, top_p=0.95.
+  final ref = LlamaEngineRef(
+    engine,
+    defaultParams: const GenerationParams(temp: 1.0, topP: 0.95),
+  );
 
   // Two pipeline configs — same code, different threshold.
   final baseline = ChatSummarizePipeline(engineRef: ref, oneShotThreshold: 999);
@@ -232,6 +238,12 @@ Future<void> main(List<String> args) async {
       'neg=${(base.negationAcc * 100).toStringAsFixed(1)}%  '
       'calls=${base.llmCalls}  ${base.wallMs}ms',
     );
+    if (verbose) {
+      stdout.writeln('    --- baseline summary ---');
+      for (final l in base.summary.split('\n')) stdout.writeln('    $l');
+      stdout.writeln('    --- baseline post-reset reply ---');
+      for (final l in base.reply.split('\n')) stdout.writeln('    $l');
+    }
 
     final v2score = await _runStrategy(
       strategy: 'v2',
@@ -249,6 +261,12 @@ Future<void> main(List<String> args) async {
       'neg=${(v2score.negationAcc * 100).toStringAsFixed(1)}%  '
       'calls=${v2score.llmCalls}  ${v2score.wallMs}ms',
     );
+    if (verbose) {
+      stdout.writeln('    --- v2 summary ---');
+      for (final l in v2score.summary.split('\n')) stdout.writeln('    $l');
+      stdout.writeln('    --- v2 post-reset reply ---');
+      for (final l in v2score.reply.split('\n')) stdout.writeln('    $l');
+    }
   }
 
   // ---- Aggregate -----------------------------------------------------------

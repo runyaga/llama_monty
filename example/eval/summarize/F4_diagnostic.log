@@ -1,0 +1,95 @@
+Running build hooks...Running build hooks...Loading model …
+
+=== F4 — long coherent (single-topic, attention-drift test) ===
+  baseline: recall=0.0%  neg=100.0%  calls=1  4792ms
+    --- baseline summary ---
+    *   **Trip Goal:** 2-week trip to Japan in November covering Tokyo, Kyoto, Osaka, and Kanazawa.
+    *   **Transportation Decision:** Start at Haneda (Tokyo) and use a Japan Rail Pass for intercity travel.
+    *   **Itinerary Revision:** The plan was revised to prioritize Kyoto immersion, condensing time in Tokyo/Osaka.
+    *   **Kyoto Activities Selected:** Fushimi Inari Shrine, Arashiyama Bamboo Grove, and a Tea Ceremony.
+    *   **Budget Set:** $4000 USD for the two weeks.
+        *   *Budget Breakdown:* Transportation ($800–$1,000), Accommodation ($800–$1,200), Food/Dining ($800–$1,000), Activities ($300–$400).
+    *   **Next Step:** User is ready to start booking specific activities.
+    --- baseline post-reset reply ---
+    I know the following about you based on our conversation history:
+    
+    *   **Trip Goal:** A 2-week trip to Japan in November, covering Tokyo, Kyoto, Osaka, and Kanazawa.
+    *   **Transportation Plan:** You plan to start at Haneda (Tokyo) and use a Japan Rail Pass for intercity travel.
+    *   **Itinerary Focus:** The itinerary was revised to prioritize immersion in Kyoto, condensing time in Tokyo/Osaka.
+    *   **Kyoto Activities:** Selected activities include visiting Fushimi Inari Shrine, the Arashiyama Bamboo Grove, and attending a Tea Ceremony.
+    *   **Budget:** Your total budget is set at $4000 USD for the two weeks, with a specified breakdown across transportation, accommodation, food/dining, and activities.
+  v2:       recall=92.3%  neg=100.0%  calls=7  45297ms
+    --- v2 summary ---
+    Known facts:
+    - priya is planning a 2-week trip to Japan in November
+    - tokyo focus on modern sights, vibrant neighborhoods, and unique dining experiences
+    - kyoto is essential for temples, gardens, and experiencing traditional Japanese aesthetics
+    - osaka is known as Japan's kitchen
+    - kanazawa focus on historic districts, gardens, and traditional crafts
+    - travel is recommended for between cities Shinkansen/Bullet Train
+    - flying into is the most efficient way to cover major destinations
+    - autumn foliage is peak season for beautiful scenery, especially in Kyoto and surrounding areas
+    - kyoto is the heart of traditional japan Japan
+    - tokyo is scheduled for days 1–5 Travel
+    - travel from tokyo to kyoto via shinkansen JR Pass
+    - kyoto is scheduled for days 7–10 4 Full Days
+    - osaka is scheduled for days 12–13 2 Days
+    - fushimi inari shrine is an essential inclusion Kyoto trip
+    - arashiyama bamboo grove is an essential inclusion Kyoto trip
+    - tea ceremony is an essential inclusion Kyoto trip
+    - day 1 schedule involves Arashiyama (Bamboo Grove + Tenryu-ji Temple)
+    - day 2 schedule involves Fushimi Inari (Early morning hike)
+    - day 3 schedule focuses on Gion, Kiyomizu-dera Temple
+    - day 4 schedule is dedicated to Tea Ceremony experience
+    - $4000 usd budget allows for a comfortable, mid-range experience in Japan
+    - transportation cost covers the international flight to Haneda, the 14-day JR Pass, and local transit
+    - accommodation cost range is $800 – $1200 for 14 days
+    - food & dining allowance allows for excellent street food, casual meals, and a few nicer dinners
+    - the 14-day jr pass will be crucial because it covers Tokyo, Kyoto, Osaka, and Kanazawa
+    - accommodation strategy in major cities like tokyo and kyoto look for accommodation near a major train station
+    
+    Decisions:
+    - The assistant suggested a 14-day itinerary framework covering Tokyo, Kyoto, Osaka, and Kanazawa.
+    - A revised 14-day framework prioritizing Kyoto was presented.
+    - Fushimi Inari Shrine, Arashiyama Bamboo Grove, and a tea ceremony were confirmed as essential inclusions for the Kyoto trip.
+    - A suggested budget allocation breakdown was provided for the 14-day trip.
+    
+    Open questions:
+    - What are your main interests
+    - What pace do you prefer
+    - What is your budget like
+    - What is the user's primary focus (e.g., Food/Culinary, History/Temples, Modern City Life, Nature)?
+    - Are you ready to start thinking about accommodation or specific dining plans?
+    - Do you want to start looking into specific accommodation areas, or would you like me to suggest some cost-effective dining ideas for Kyoto?
+    --- v2 post-reset reply ---
+    I know the following about you (Priya):
+    
+    **Travel Plans:**
+    *   **Destination:** A 2-week trip to Japan in November.
+    *   **Focus Areas:**
+        *   **Tokyo:** Modern sights, vibrant neighborhoods, and unique dining experiences.
+        *   **Kyoto:** Temples, gardens, and traditional Japanese aesthetics.
+        *   **Osaka:** Known as Japan's kitchen.
+        *   **Kanazawa:** Historic districts and traditional crafts.
+    
+    **Itinerary Framework (14 Days):**
+    *   **Tokyo:** Days 1–5.
+    *   **Kyoto:** Days 7–10 (4 full days).
+    *   **Osaka:** Days 12–13 (2 days).
+    
+    **Essential Kyoto Inclusions:**
+    *   Fushimi Inari Shrine.
+    *   Arashiyama Bamboo Grove.
+    *   Tea Ceremony experience.
+    
+    **Budget & Logistics:**
+    *   **Total Budget:** $4000 USD (for a comfortable, mid-range experience).
+    *   **Transportation Strategy:** Flying into Haneda, using a 14-day JR Pass for major travel, and local transit.
+    *   **Accommodation Estimate:** $800 – $1200 for the entire 14 days.
+    
+    **Implied Interests (Based on focus areas):**
+    *   A mix of modern city life/culture (Tokyo) and traditional culture/history (Kyoto).
+
+=== aggregate ===
+  baseline: recall=0.0%  neg=100.0%  calls=1  4792ms
+  v2: recall=92.3%  neg=100.0%  calls=7  45297ms

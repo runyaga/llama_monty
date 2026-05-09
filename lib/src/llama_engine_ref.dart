@@ -17,10 +17,28 @@ import 'package:llamadart/llamadart.dart';
 /// ```
 class LlamaEngineRef {
   /// Creates a [LlamaEngineRef] wrapping [engine].
-  LlamaEngineRef(this.engine);
+  ///
+  /// Pass [defaultParams] to apply the same generation settings to every
+  /// [complete] call that doesn't override them. Typically this is where
+  /// you set model-family-specific recommended sampling (e.g. Gemma 4
+  /// recommends temp=1.0, topP=0.95).
+  LlamaEngineRef(this.engine, {this.defaultParams});
 
   /// The underlying [LlamaEngine].
   final LlamaEngine engine;
+
+  /// Default [GenerationParams] applied to every [complete] call when the
+  /// caller doesn't pass their own. `null` = use llamadart's library
+  /// defaults (temp=0.8, topP=0.9).
+  ///
+  /// Recommended for Gemma 4:
+  /// ```dart
+  /// LlamaEngineRef(
+  ///   engine,
+  ///   defaultParams: const GenerationParams(temp: 1.0, topP: 0.95),
+  /// );
+  /// ```
+  final GenerationParams? defaultParams;
 
   Future<void> _lock = Future.value();
 
@@ -47,12 +65,21 @@ class LlamaEngineRef {
   ///
   /// Concurrent calls are queued: each call waits for the preceding one to
   /// finish before starting its own generation.
-  Future<String> complete(List<LlamaChatMessage> messages) =>
-      withLock(() => _collect(messages));
+  ///
+  /// [params] overrides [defaultParams] when provided; otherwise the
+  /// engine's defaults apply.
+  Future<String> complete(
+    List<LlamaChatMessage> messages, {
+    GenerationParams? params,
+  }) =>
+      withLock(() => _collect(messages, params ?? defaultParams));
 
-  Future<String> _collect(List<LlamaChatMessage> messages) async {
+  Future<String> _collect(
+    List<LlamaChatMessage> messages,
+    GenerationParams? params,
+  ) async {
     final buf = StringBuffer();
-    await for (final chunk in engine.create(messages)) {
+    await for (final chunk in engine.create(messages, params: params)) {
       final content = chunk.choices.firstOrNull?.delta.content;
       if (content != null) buf.write(content);
     }
