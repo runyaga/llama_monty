@@ -2163,8 +2163,11 @@ from pathlib import Path
 out = []
 
 def _safe_size(p):
+    # Use read_bytes so we don't trip the UTF-8 decoder on macOS
+    # .DS_Store and other binary cruft. Length-only is what the
+    # Files panel actually displays.
     try:
-        return len(p.read_text())
+        return len(p.read_bytes())
     except Exception:
         return -1
 
@@ -2182,7 +2185,7 @@ def walk(root):
         else:
             walk(str(entry))
 
-for root in ['/tmp/llama-test/fixtures', '/tmp/llama_monty', '/tmp/llama-test/uploads']:
+for root in ['/tmp/llama-test']:
     walk(root)
 
 print(json.dumps(out))
