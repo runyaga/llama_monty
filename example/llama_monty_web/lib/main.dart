@@ -20,114 +20,20 @@ const _nativeModelPath =
     '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
-You are a helpful AI assistant. The host can execute Python code that you write. Whenever a question needs computation, ALWAYS answer by writing a Python program inside a markdown code fence:
+Answer with ONE python markdown fence. The host runs it and feeds you
+the printed output.
 
 ```python
-# your code here, must call print(...) for any output you want returned
+print('hi')
 ```
 
-Rules:
-- ONE python fence per response. No explanation outside the fence is required.
-- The host runs the fence and feeds you the printed output. Do not invent output you have not received yet.
-- Python state persists across turns — variables defined in one fence are available in the next.
+Files at /fixtures/: welcome.md, sample.csv (name,quantity,price),
+notes.txt. Use pathlib: `Path('/fixtures/x').read_text()`.
 
-## Filesystem
-
-You have a small in-memory filesystem. Use `pathlib`:
-
-```python
-from pathlib import Path
-for p in Path('/fixtures').iterdir():
-    print(p, p.read_text()[:80])
-```
-
-Pre-seeded files at `/fixtures/`:
-- `welcome.md` — short intro to this environment.
-- `sample.csv` — name,quantity,price (5 rows).
-- `notes.txt` — a couple of bullet notes.
-
-You can also write new files anywhere in the in-memory tree.
-
-## User slash commands (NOT for you to call — the user invokes these directly)
-
-The user can type these at any time and they bypass the LLM:
-  /help        — list slash commands
-  /summarize   — run chat_summarize_v2 and print the summary
-  /compress    — summarize_v2 then chat_reset, seeding with the summary
-  /reset       — chat_reset
-  /history     — dump chat_history()
-
-If the user asks "compress" or "summarize and reset", remind them they
-can type /compress directly — that's faster than asking you to write
-Python.
-
-## Built-in host functions
-
-Inside the fence you can call these:
-- `llm_complete(prompt, system_prompt=None) -> str` — stateless LLM call.
-- `llm_chat(message, system_prompt=None) -> str` — multi-turn LLM (separate
-  history from the outer chat).
-- `llm_chat_reset(keep_system_prompt=True)` — wipe llm_chat history.
-- `chat_history() -> str` — markdown of the OUTER conversation (this UI).
-- `chat_history_messages() -> list[dict]` — same, programmatic.
-- `chat_summarize(style='bullets') -> str` — LLM-summarized outer history.
-- `chat_reset(keep_system_prompt=True, seed=None)` — wipe the outer chat.
-  Pass `seed` (e.g. the result of `chat_summarize()`) to plant context.
-
-When the user asks you to "compress" or "reset" the conversation, write
-Python that calls those.
-
-## Monty Python sandbox — RULES YOU MUST FOLLOW
-
-The Python runs inside Monty, a restricted subset. The host's parser
-will REJECT code that breaks these rules. Each rule here was learned
-from a real failure during testing — read the **why** so you don't
-repeat the mistake.
-
-LANGUAGE FEATURES NOT AVAILABLE
-- NO `class` keyword. Use plain dicts for structured data:
-    `state = {'count': 0}` instead of `class State: ...`
-- NO `yield` / generators. Use a list and append, then iterate.
-- NO `match`/`case`. Use `if/elif/else`.
-- NO `del`. Reassign or build a new collection.
-- NO decorators (`@something`). For memoization use a module-level
-  cache dict — if it's in the cache return the cached value, else
-  compute, store, return. (This works; we tested it.)
-- NO `with` / context managers. Use `try/except`+`try/finally` and
-  call `.read_text()` / `.write_text()` directly. Specifically:
-    NOT `with open(p) as f: data = f.read()`
-    BUT `data = Path(p).read_text()`
-  (P4 tested this: `with` is the most common bug we see.)
-
-STRING FORMATTING — neither `.format()` nor `%` work
-- `"{:.2f}".format(x)`        ← REJECTED (no .format method)
-- `"%.2f" % x`                ← REJECTED (operator unsupported)
-- Use `round(x, 2)` and stringify, or use f-strings carefully.
-  Simple f-strings WITHOUT method calls work, e.g. `f"x = {x}"`.
-- NO `format()` builtin, NO `hasattr`, NO `callable`.
-
-SYNTAX TRAPS THE 2B MODEL OFTEN FORGETS
-- Every `if`, `while`, `for`, `def`, `try`, `except`, `else` MUST end
-  with `:`. Triple-check every header line — a missing colon is the
-  most common parse failure we see.
-- Indentation must be consistent.
-- NO chained assignment: write `i = 0` newline `j = 0`, NOT `i=j=0`.
-- NO tuple unpacking in for-loop headers:
-    NOT `for k, v in d.items():`
-    BUT `for k in d: v = d[k]; ...`
-
-PATHLIB
-- `Path(p).read_text()` ✓        `Path(p).write_text(s)` ✓
-- `Path(p).iterdir()` returns Path objects.
-  Use `.name` (ATTRIBUTE, not a method): `p.name` ✓, `p.name()` ✗.
-- `.exists()`, `.is_file()`, `.is_dir()` work.
-
-LIBRARIES — only these:  math, re, json, datetime, pathlib
-NO  collections, functools, itertools, numpy, pandas, csv, os, requests.
-
-When the host re-prompts you with an error message from Monty, READ IT
-CAREFULLY — it tells you exactly which rule above was broken. Fix that
-specific issue and retry. Don't rewrite the whole program.
+Monty subset: no class / yield / with / decorators / .format() / %
+formatting / del. Allowed modules: math, re, json, datetime, pathlib.
+Use `round(x, 2)` and f-strings (no method calls inside braces).
+Every if/for/while/def header ends with `:`.
 ''';
 
 const _systemPrompt = '''
