@@ -1,6 +1,7 @@
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llamadart/llamadart.dart';
 
+import 'chat_summarize_pipeline.dart';
 import 'llama_engine_ref.dart';
 
 /// A [MontyExtension] that lets LLM-written Python introspect, summarize and
@@ -69,8 +70,12 @@ class ChatShellPlugin extends MontyExtension {
         _chatHistoryFunction,
         _chatHistoryMessagesFunction,
         _summarizeChatFunction,
+        _summarizeChatV2Function,
         _resetChatFunction,
       ];
+
+  late final ChatSummarizePipeline _pipeline =
+      ChatSummarizePipeline(engineRef: _engineRef);
 
   // ---------------------------------------------------------------------------
   // chat_history — markdown transcript
@@ -154,6 +159,43 @@ class ChatShellPlugin extends MontyExtension {
       ),
     ];
     return _engineRef.complete(messages);
+  }
+
+  // ---------------------------------------------------------------------------
+  // chat_summarize_v2 — multi-step pipeline tuned for small (2B) models
+  // ---------------------------------------------------------------------------
+
+  late final HostFunction _summarizeChatV2Function = HostFunction(
+    dispatch: DispatchMode.sync,
+    schema: const HostFunctionSchema(
+      name: 'chat_summarize_v2',
+      description:
+          'Run the multi-step summarization pipeline over the outer chat '
+          'history. Uses chunked schema-driven extraction + Python-side '
+          'merge + render + validate + repair, with a deterministic '
+          'fact-table fallback. Designed for small (2B-class) models that '
+          'drop facts in one-shot summaries. Returns the validated summary '
+          'string. Pass `style` to bias prose form (default "bullets").',
+      params: [
+        HostParam(
+          name: 'style',
+          type: HostParamType.string,
+          isRequired: false,
+          defaultValue: 'bullets',
+          description: 'Free-form style hint for the render step.',
+        ),
+      ],
+    ),
+    handler: _handleSummarizeChatV2,
+  );
+
+  Future<Object?> _handleSummarizeChatV2(
+    Map<String, Object?> args,
+    HostContext ctx,
+  ) async {
+    final style = (args['style'] as String?) ?? 'bullets';
+    final result = await _pipeline.runFromChatSession(_shell(), style: style);
+    return result.summary;
   }
 
   // ---------------------------------------------------------------------------

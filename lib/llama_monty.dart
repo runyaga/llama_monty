@@ -23,5 +23,7 @@
 library;
 
 export 'src/chat_shell_plugin.dart';
+export 'src/chat_summarize_pipeline.dart';
 export 'src/llama_engine_ref.dart';
 export 'src/llama_monty_plugin.dart';
+export 'src/summarizable_source.dart';
