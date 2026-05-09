@@ -10,7 +10,7 @@
 // For each task the LLM writes Python in a markdown fence, the fence
 // extractor pulls the code, Monty executes it against the seeded
 // MemoryFileSystem-equivalent (LocalFileSystem on FFI, scoped to
-// /tmp/llama_monty_files/), and stdout shows the actual file content
+// /tmp/llama-test/uploads/), and stdout shows the actual file content
 // plus the model's computed answer.
 //
 // On a parse failure (the 2B model occasionally drops a colon) we
@@ -29,7 +29,7 @@ import 'package:llamadart/llamadart.dart';
 
 const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
-const _fixtureRoot = '/tmp/llama_monty_files/fixtures';
+const _fixtureRoot = '/tmp/llama-test/uploads/fixtures';
 
 const _systemPrompt = '''
 You write Python that runs inside Monty (a restricted Python subset).

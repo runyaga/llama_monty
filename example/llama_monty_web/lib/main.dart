@@ -23,7 +23,7 @@ You are part of a coding agent. Around you sit:
 
   - A Python sandbox (Monty, a Python 3 subset). You run code in
     ```monty fences. Variables and imports persist across fences.
-  - A filesystem — `/tmp/` (scratch) and `/tmp/fixtures/`
+  - A filesystem — `/tmp/` (scratch) and `/tmp/llama-test/fixtures/`
     (pre-seeded). Use pathlib.
   - Sub-agents via `sandbox_spawn` / `sandbox_await` for verbose or
     parallel work. Children inherit every host function.
@@ -54,7 +54,7 @@ printed output, and you decide what's next.
 
 ```monty
 from pathlib import Path
-lines = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
+lines = Path('/tmp/llama-test/fixtures/sample.csv').read_text().splitlines()
 header = lines[0].split(',')
 print('header:', header, 'rows:', len(lines) - 1)
 ```
@@ -90,14 +90,14 @@ actually receive a value from a tool call, don't report it.
 const _fixtureWelcome = '''
 # llama_monty — welcome
 
-This is a tiny in-memory filesystem mounted at `/tmp/fixtures/`. The model can
+This is a tiny in-memory filesystem mounted at `/tmp/llama-test/fixtures/`. The model can
 list, read, and write here just like a real disk. Everything lives in this
 browser tab — refresh and it's gone.
 
 Try asking the assistant:
-- "List the files under /tmp/fixtures and read welcome.md"
-- "Compute the average of column2 in /tmp/fixtures/sample.csv"
-- "Append a TODO to /tmp/fixtures/notes.txt"
+- "List the files under /tmp/llama-test/fixtures and read welcome.md"
+- "Compute the average of column2 in /tmp/llama-test/fixtures/sample.csv"
+- "Append a TODO to /tmp/llama-test/fixtures/notes.txt"
 ''';
 
 const _fixtureSampleCsv = '''
@@ -115,17 +115,17 @@ const _fixtureNotes = '''
 - next: streaming + drag-drop fixtures
 ''';
 
-/// Plants three small files in `/tmp/fixtures/` via Monty's `Path.*` ops so the
+/// Plants three small files in `/tmp/llama-test/fixtures/` via Monty's `Path.*` ops so the
 /// LLM has something to read on first launch. Runs the same Python in any
 /// runtime; pass each runtime that needs the fixtures (the agent and the
 /// REPL share the same MemoryFileSystem instance via [defaultOsHandler]).
 Future<void> _seedFixtures(MontyRuntime runtime) async {
   final script = StringBuffer()
     ..writeln('from pathlib import Path')
-    ..writeln("Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)")
-    ..writeln(_writeFile('/tmp/fixtures/welcome.md', _fixtureWelcome))
-    ..writeln(_writeFile('/tmp/fixtures/sample.csv', _fixtureSampleCsv))
-    ..writeln(_writeFile('/tmp/fixtures/notes.txt', _fixtureNotes));
+    ..writeln("Path('/tmp/llama-test/fixtures').mkdir(parents=True, exist_ok=True)")
+    ..writeln(_writeFile('/tmp/llama-test/fixtures/welcome.md', _fixtureWelcome))
+    ..writeln(_writeFile('/tmp/llama-test/fixtures/sample.csv', _fixtureSampleCsv))
+    ..writeln(_writeFile('/tmp/llama-test/fixtures/notes.txt', _fixtureNotes));
   final result = await runtime.execute(script.toString()).result;
   if (result.error != null) {
     // ignore: avoid_print
@@ -379,12 +379,12 @@ class _ChatPageState extends State<ChatPage> {
         'Fence 1: total = 0. Fence 2: total = total + 10. '
             'Fence 3: print(total).',
         // T21-T25 files
-        'Print the FIRST non-blank line of /tmp/fixtures/welcome.md.',
-        'Print just the column header line of /tmp/fixtures/sample.csv.',
-        'Print the integer number of DATA rows in /tmp/fixtures/sample.csv '
+        'Print the FIRST non-blank line of /tmp/llama-test/fixtures/welcome.md.',
+        'Print just the column header line of /tmp/llama-test/fixtures/sample.csv.',
+        'Print the integer number of DATA rows in /tmp/llama-test/fixtures/sample.csv '
             '(excluding the header line).',
-        'Print each filename in /tmp/fixtures/ on its own line.',
-        "Write 'hello' to /tmp/state/g.txt. Read it back and print "
+        'Print each filename in /tmp/llama-test/fixtures/ on its own line.',
+        "Write 'hello' to /tmp/llama-test/state/g.txt. Read it back and print "
             'the contents.',
       ],
     ),
@@ -396,14 +396,14 @@ class _ChatPageState extends State<ChatPage> {
           'from tool output (no hallucinated CSV headers, no invented '
           'row counts).',
       prompts: [
-        'How many data rows are in /tmp/fixtures/sample.csv '
+        'How many data rows are in /tmp/llama-test/fixtures/sample.csv '
             '(excluding the header)?',
-        'What is the column header line of /tmp/fixtures/sample.csv? '
+        'What is the column header line of /tmp/llama-test/fixtures/sample.csv? '
             'Quote it exactly.',
-        'What is the price of bananas in /tmp/fixtures/sample.csv?',
-        'Which item in /tmp/fixtures/sample.csv has the HIGHEST price?',
+        'What is the price of bananas in /tmp/llama-test/fixtures/sample.csv?',
+        'Which item in /tmp/llama-test/fixtures/sample.csv has the HIGHEST price?',
         'What is the AVERAGE price across all rows in '
-            '/tmp/fixtures/sample.csv? Round to 2 decimals.',
+            '/tmp/llama-test/fixtures/sample.csv? Round to 2 decimals.',
       ],
     ),
     (
@@ -416,30 +416,30 @@ class _ChatPageState extends State<ChatPage> {
           'Gemma 4 E2B — that is informative.',
       prompts: [
         "Print the dict {'a': [1, 2, 3], 'b': {'nested': True}}.",
-        'Print only the line of /tmp/fixtures/welcome.md that contains '
+        'Print only the line of /tmp/llama-test/fixtures/welcome.md that contains '
             'an em-dash (—).',
-        'Print all data rows of /tmp/fixtures/sample.csv sorted by '
+        'Print all data rows of /tmp/llama-test/fixtures/sample.csv sorted by '
             'price DESCENDING, one row per line.',
         'Compute the standard deviation of the prices in '
-            '/tmp/fixtures/sample.csv (use math.sqrt). Print the result '
+            '/tmp/llama-test/fixtures/sample.csv (use math.sqrt). Print the result '
             'rounded to 4 decimals using round() — do NOT use .format() '
             'or % formatting.',
-        'Read /tmp/fixtures/sample.csv, find the item with the lowest '
+        'Read /tmp/llama-test/fixtures/sample.csv, find the item with the lowest '
             'price and the item with the highest price, write '
             "{'min_item': name, 'max_item': name} as JSON to "
-            '/tmp/state/extremes.json, then in your final reply name '
+            '/tmp/llama-test/state/extremes.json, then in your final reply name '
             'BOTH items by their actual names from the file.',
-        'Use the FILE-BUS pattern to: (1) read /tmp/fixtures/sample.csv '
+        'Use the FILE-BUS pattern to: (1) read /tmp/llama-test/fixtures/sample.csv '
             'and write parsed rows as a list of dicts to '
-            '/tmp/state/01_rows.json; (2) read 01_rows.json and write '
+            '/tmp/llama-test/state/01_rows.json; (2) read 01_rows.json and write '
             "{'min': <min price>, 'max': <max price>} to "
-            '/tmp/state/02_extremes.json; (3) verify by reading '
+            '/tmp/llama-test/state/02_extremes.json; (3) verify by reading '
             '02_extremes.json and printing it. Then in your prose '
             'reply, state the min and max prices.',
-        'Use the FILE-BUS pattern: (1) read /tmp/fixtures/welcome.md '
+        'Use the FILE-BUS pattern: (1) read /tmp/llama-test/fixtures/welcome.md '
             'and write each non-blank line as a JSON list to '
-            '/tmp/state/01_lines.json; (2) read 01_lines.json and '
-            "write {'line_count': N} to /tmp/state/02_count.json; "
+            '/tmp/llama-test/state/01_lines.json; (2) read 01_lines.json and '
+            "write {'line_count': N} to /tmp/llama-test/state/02_count.json; "
             '(3) verify by reading 02_count.json and printing it. '
             'State the line count in your prose reply.',
       ],
@@ -452,13 +452,13 @@ class _ChatPageState extends State<ChatPage> {
           'computing numbers.',
       prompts: [
         // ---- files ------------------------------------------------------
-        'List the files under /tmp/fixtures and print each filename + its size in bytes.',
-        'Read /tmp/fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
-        'Read /tmp/fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
-        'Read /tmp/fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
-        'Find the most-expensive item in /tmp/fixtures/sample.csv and print "name → price".',
-        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /tmp/fixtures/notes.txt, then print the full updated file.',
-        'Write a JSON file to /tmp/llama_monty_files/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /tmp/fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
+        'List the files under /tmp/llama-test/fixtures and print each filename + its size in bytes.',
+        'Read /tmp/llama-test/fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
+        'Read /tmp/llama-test/fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
+        'Read /tmp/llama-test/fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
+        'Find the most-expensive item in /tmp/llama-test/fixtures/sample.csv and print "name → price".',
+        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /tmp/llama-test/fixtures/notes.txt, then print the full updated file.',
+        'Write a JSON file to /tmp/llama-test/uploads/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /tmp/llama-test/fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
 
         // ---- datetime ---------------------------------------------------
         'Print today\'s date in ISO format (YYYY-MM-DD).',
@@ -467,10 +467,10 @@ class _ChatPageState extends State<ChatPage> {
         'Print what day-of-week (Monday/Tuesday/etc.) the date 2026-12-25 falls on.',
 
         // ---- multi-step combining files + datetime + json ---------------
-        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /tmp/fixtures>]} and print it as JSON.',
-        'Read /tmp/fixtures/sample.csv and write a new file /tmp/llama_monty_files/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
-        'Compute SHA-like checksum of /tmp/fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
-        'Read /tmp/fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
+        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /tmp/llama-test/fixtures>]} and print it as JSON.',
+        'Read /tmp/llama-test/fixtures/sample.csv and write a new file /tmp/llama-test/uploads/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
+        'Compute SHA-like checksum of /tmp/llama-test/fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
+        'Read /tmp/llama-test/fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
       ],
     ),
   ];
@@ -605,7 +605,7 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
-          // Children share the parent's Path. handler so /tmp/fixtures/ and
+          // Children share the parent's Path. handler so /tmp/llama-test/fixtures/ and
           // anything else the parent has mounted is visible to the
           // subagent. Otherwise the default 'isolated' strategy gives
           // children a fresh empty MemoryFileSystem.
@@ -625,7 +625,7 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
-          // Children share the parent's Path. handler so /tmp/fixtures/ and
+          // Children share the parent's Path. handler so /tmp/llama-test/fixtures/ and
           // anything else the parent has mounted is visible to the
           // subagent. Otherwise the default 'isolated' strategy gives
           // children a fresh empty MemoryFileSystem.
@@ -634,7 +634,7 @@ class _ChatPageState extends State<ChatPage> {
       ],
     );
 
-    // Seed a tiny fixtures directory at /tmp/fixtures/ so the LLM has
+    // Seed a tiny fixtures directory at /tmp/llama-test/fixtures/ so the LLM has
     // something concrete to read on first launch. /tmp is writable on
     // both platforms (web's MemoryFileSystem and macOS's real disk).
     // The two runtimes share the same OS handler so seeding once is
@@ -752,13 +752,13 @@ class _ChatPageState extends State<ChatPage> {
           'Slash commands:  /help  /summarize  /compress  /reset  /history  /files',
     );
 
-    // Also show what's in the seeded /tmp/fixtures/ directory so the user
+    // Also show what's in the seeded /tmp/llama-test/fixtures/ directory so the user
     // knows files are mounted and ready to read.
     if (kIsWeb) {
       try {
         final ls = await agentSession.execute('''
 from pathlib import Path
-root = Path('/tmp/fixtures')
+root = Path('/tmp/llama-test/fixtures')
 if root.exists():
   out = []
   for p in root.iterdir():
@@ -772,7 +772,7 @@ else:
         if (listing.isNotEmpty && listing != '(none)') {
           _appendChatLog(
             'sys',
-            '/tmp/fixtures contents:\n$listing\n\n'
+            '/tmp/llama-test/fixtures contents:\n$listing\n\n'
                 'Try: "read welcome.md", "what\'s the average price in '
                 'sample.csv", or "summarize notes.txt".',
           );
@@ -1199,7 +1199,7 @@ else:
                 '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
                 '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
                 '  /history             dump the current chat_history()\n'
-                '  /files [path]        list files under /tmp/fixtures (or any path)\n'
+                '  /files [path]        list files under /tmp/llama-test/fixtures (or any path)\n'
                 '  /help                this list',
           );
         case '/summarize':
@@ -1256,9 +1256,9 @@ print('--- chat reset, seeded with summary ---')
             _appendChatLog('output', (r.printOutput ?? '').trim());
           }
         case '/files':
-          // List anything under /tmp/fixtures/ — the seed dir on web. Argument
+          // List anything under /tmp/llama-test/fixtures/ — the seed dir on web. Argument
           // (if any) is treated as a different root.
-          final root = argText.isEmpty ? '/tmp/fixtures' : argText;
+          final root = argText.isEmpty ? '/tmp/llama-test/fixtures' : argText;
           _appendChatLog('tool', "list($root)");
           final r = await agent.execute('''
 from pathlib import Path
@@ -2009,7 +2009,7 @@ else:
   // Files panel — visualises the in-memory filesystem the LLM operates on.
   // -------------------------------------------------------------------------
 
-  /// Walks well-known roots (`/tmp/fixtures`, `/tmp/llama_monty*`) via Monty
+  /// Walks well-known roots (`/tmp/llama-test/fixtures`, `/tmp/llama_monty*`) via Monty
   /// pathlib and updates [_filesEntries]. Best-effort: silently no-ops if
   /// the runtime isn't ready yet.
   Future<void> _refreshFiles() async {
@@ -2042,7 +2042,7 @@ def walk(root):
         else:
             walk(str(entry))
 
-for root in ['/tmp/fixtures', '/tmp/llama_monty', '/tmp/llama_monty_files']:
+for root in ['/tmp/llama-test/fixtures', '/tmp/llama_monty', '/tmp/llama-test/uploads']:
     walk(root)
 
 print(json.dumps(out))
@@ -2075,7 +2075,7 @@ print(json.dumps(out))
     }
   }
 
-  /// Writes [content] to `/tmp/fixtures/<filename>` via Monty's pathlib.
+  /// Writes [content] to `/tmp/llama-test/fixtures/<filename>` via Monty's pathlib.
   /// Used by both the file-picker upload and the drop-target. Refreshes
   /// the panel after the write so the new file shows up immediately.
   Future<bool> _addFileBytes({
@@ -2087,11 +2087,11 @@ print(json.dumps(out))
     final safeName = filename
         .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
         .replaceAll(RegExp(r'^_+|_+$'), '');
-    final target = '/tmp/fixtures/${safeName.isEmpty ? "file.txt" : safeName}';
+    final target = '/tmp/llama-test/fixtures/${safeName.isEmpty ? "file.txt" : safeName}';
     final escaped = jsonEncode(content);
     final r = await agent.execute('''
 from pathlib import Path
-Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)
+Path('/tmp/llama-test/fixtures').mkdir(parents=True, exist_ok=True)
 Path(${jsonEncode(target)}).write_text($escaped)
 print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
 ''').result;
@@ -2107,7 +2107,7 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
   }
 
   /// Opens the OS file picker, reads each selected file as text, and
-  /// writes them into `/tmp/fixtures/`. Binary files are silently skipped
+  /// writes them into `/tmp/llama-test/fixtures/`. Binary files are silently skipped
   /// (they'd come through as non-UTF8 strings and Monty's text writer
   /// would reject them).
   Future<void> _pickAndAddFiles() async {
@@ -2130,7 +2130,7 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
         }
       }
       if (added > 0) {
-        _appendChatLog('sys', 'Added $added file(s) to /tmp/fixtures/');
+        _appendChatLog('sys', 'Added $added file(s) to /tmp/llama-test/fixtures/');
       }
     } finally {
       setState(() => _filesBusy = false);

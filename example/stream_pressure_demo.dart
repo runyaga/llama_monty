@@ -164,7 +164,7 @@ print('opened ids', ids)
   stdout.writeln('=== /journal/streams.jsonl ===');
   final journalScript = '''
 from pathlib import Path
-p = Path('/tmp/llama_monty/streams.jsonl')
+p = Path('/tmp/llama-test/streams/streams.jsonl')
 if p.exists():
   print(p.read_text())
 else:

@@ -66,13 +66,13 @@ print('await returned:', v)
 sandbox_free(h)
 ''');
 
-  // Probe 4: child reads /tmp/fixtures via shared VFS.
-  await _exec(monty, 'P4 child reads shared /tmp/fixtures', '''
+  // Probe 4: child reads /tmp/llama-test/fixtures via shared VFS.
+  await _exec(monty, 'P4 child reads shared /tmp/llama-test/fixtures', '''
 from pathlib import Path
-Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)
-Path('/tmp/fixtures/probe.txt').write_text("hello from parent")
+Path('/tmp/llama-test/fixtures').mkdir(parents=True, exist_ok=True)
+Path('/tmp/llama-test/fixtures/probe.txt').write_text("hello from parent")
 
-h = sandbox_spawn("from pathlib import Path\\nprint(Path('/tmp/fixtures/probe.txt').read_text())")
+h = sandbox_spawn("from pathlib import Path\\nprint(Path('/tmp/llama-test/fixtures/probe.txt').read_text())")
 v = sandbox_await(h)
 print('await returned:', v)
 sandbox_free(h)

@@ -262,9 +262,9 @@ Future<void> main(List<String> args) async {
   final monty = MontyRuntime(os: defaultOsHandler());
   await monty.execute('''
 from pathlib import Path
-Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)
+Path('/tmp/llama-test/fixtures').mkdir(parents=True, exist_ok=True)
 # Symlink-equivalent: copy the fixture CSV into /fixtures/ as well as
-# /tmp/fixtures/ so probes can read either path.
+# /tmp/llama-test/fixtures/ so probes can read either path.
 csv_data = """name,quantity,price
 apples,12,0.45
 bananas,5,0.20
@@ -272,13 +272,13 @@ cherries,30,0.10
 dates,8,1.20
 elderberries,3,2.50
 """
-Path('/tmp/fixtures/sample.csv').write_text(csv_data)
+Path('/tmp/llama-test/fixtures/sample.csv').write_text(csv_data)
 ''').result;
 
   // Note: native LocalFileSystem can't write to /fixtures/ without sudo,
-  // so we redirect /fixtures/ in P4's prompt to /tmp/fixtures/.
+  // so we redirect /fixtures/ in P4's prompt to /tmp/llama-test/fixtures/.
   // Quick-and-dirty: rewrite the user prompt before sending.
-  String swapPath(String s) => s.replaceAll('/fixtures/', '/tmp/fixtures/');
+  String swapPath(String s) => s.replaceAll('/fixtures/', '/tmp/llama-test/fixtures/');
 
   final tally = <String, int>{
     'PASS': 0,

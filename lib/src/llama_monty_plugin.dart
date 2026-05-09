@@ -14,7 +14,7 @@ import 'llama_engine_ref.dart';
 ///
 /// ```python
 /// from pathlib import Path
-/// for line in Path('/tmp/llama_monty/streams.jsonl').read_text().splitlines():
+/// for line in Path('/tmp/llama-test/streams/streams.jsonl').read_text().splitlines():
 ///     print(line)
 /// ```
 ///
@@ -29,7 +29,7 @@ import 'llama_engine_ref.dart';
 /// The journal also gives the host a tamper-proof reconciliation log: at
 /// any point, comparing journal entries with [LlamaMontyPlugin.streamHandleIds]
 /// shows which handles leaked.
-const String llamaMontyStreamsJournalPath = '/tmp/llama_monty/streams.jsonl';
+const String llamaMontyStreamsJournalPath = '/tmp/llama-test/streams/streams.jsonl';
 const String _llamaMontyStreamsJournalDir = '/tmp/llama_monty';
 
 /// Internal state for a single streaming completion: a buffered queue of
