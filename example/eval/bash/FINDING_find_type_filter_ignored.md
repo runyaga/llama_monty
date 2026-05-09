@@ -1,4 +1,34 @@
-# Finding — `find -type f` and `-type d` silently ignored
+# [RETRACTED] Finding — `find -type f` and `-type d` silently ignored
+
+> **2026-05-09 retraction**: This finding is **incorrect**. Re-probing
+> against current main (post-M1 commit `d7dc0ee`) shows `-type f` and
+> `-type d` ARE honored:
+> ```
+> $ find /tmp           → 6 paths (3 files + 3 inferred dirs)
+> $ find /tmp -type f   → 3 file paths     ✓
+> $ find /tmp -type d   → 3 dir paths      ✓
+> ```
+> The original probe in this memo must have hit a stale dylib (or
+> a different VFS shape) where directory inference wasn't surfacing.
+> Apologies for the noise.
+>
+> **What's still true**: `-exec` IS silently dropped. Probe:
+> ```
+> $ find /tmp -type f -exec wc -l {} +   → just paths, no wc output
+> $ find /tmp -type f -exec wc -l {} \;  → just paths, no wc output
+> ```
+> The `-exec` action is parsed but the action never fires; results
+> identical to bare `find -type f`. Model that writes the canonical
+> `find ... -exec wc {} +` form gets a path list, not line counts.
+>
+> Severity downgraded: `-exec` has a clean workaround (`find ... |
+> xargs wc`) and the model often pivots there. Below ship-threshold;
+> watch-list only.
+>
+> Original (incorrect) finding follows for archive purposes.
+>
+> ---
+
 
 For the dart_wasm_sandbox owner. Standalone bug-finding memo, parallel
 to `FINDING_quoted_pattern_with_spaces.md`. Surfaced from a live
