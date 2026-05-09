@@ -460,6 +460,8 @@ Path('/tmp/fixtures/sample.csv').write_text("""name,quantity,price
 apples,12,0.45
 bananas,5,0.20
 cherries,30,0.10
+dates,8,1.20
+elderberries,3,2.50
 """)
 Path('/tmp/fixtures/welcome.md').write_text(${_pyStr(_welcomeMd)})
 Path('/tmp/fixtures/notes.txt').write_text(${_pyStr(_notesTxt)})
@@ -733,7 +735,7 @@ Future<void> main() async {
         prompt: 'Print the integer number of DATA rows in '
             '/tmp/fixtures/sample.csv (excluding the header line).',
         maxTurns: 3,
-        verify: _v(printContains: '3', proseContainsAll: ['3'])),
+        verify: _v(printContains: '5', proseContainsAll: ['5'])),
     TestCase(id: 'T24_file_filenames',
         prompt: 'Print each filename in /tmp/fixtures/ on its own line.',
         maxTurns: 3,
@@ -750,7 +752,7 @@ Future<void> main() async {
         prompt: 'How many data rows are in /tmp/fixtures/sample.csv '
             '(excluding the header)?',
         maxTurns: 3,
-        verify: _v(proseContainsAll: ['3'],
+        verify: _v(proseContainsAll: ['5'],
             proseDoesNotContain: ['name,age,city', 'age', 'city'])),
     TestCase(id: 'T27_ground_header',
         prompt: 'What is the column header line of '
@@ -768,12 +770,17 @@ Future<void> main() async {
         prompt: 'Which item in /tmp/fixtures/sample.csv has the '
             'HIGHEST price?',
         maxTurns: 5,
-        verify: _v(proseContainsAny: ['apples', 'Apples', 'apple', 'Apple'])),
+        verify: _v(proseContainsAny: [
+          'elderberries',
+          'Elderberries',
+          'elderberry',
+        ])),
     TestCase(id: 'T30_ground_avg',
         prompt: 'What is the AVERAGE price across all rows in '
             '/tmp/fixtures/sample.csv? Round to 2 decimals.',
         maxTurns: 6,
-        verify: _v(proseContainsAll: ['0.25'])),
+        // (0.45 + 0.20 + 0.10 + 1.20 + 2.50) / 5 = 0.89
+        verify: _v(proseContainsAll: ['0.89'])),
 
     // ─────────── TIER 7: hard / known-fail ───────────────────────
     TestCase(id: 'T31_dict_print_complex',
@@ -848,11 +855,12 @@ else:
         if (out.startsWith('NO_EXTREMES')) {
           return (ok: false, reason: '02_extremes.json not written');
         }
-        if (!out.contains('min=0.1') || !out.contains('max=0.45')) {
+        // 5-row sample.csv: min price 0.10 (cherries), max 2.50 (elderberries).
+        if (!out.contains('min=0.1') || !out.contains('max=2.5')) {
           return (ok: false, reason: 'wrong values: $out');
         }
         if (!finalProse.contains('0.1') ||
-            !finalProse.contains('0.45')) {
+            !finalProse.contains('2.5')) {
           return (
             ok: false,
             reason: 'prose missing values — got: '
@@ -942,11 +950,12 @@ else:
           if (out.startsWith('MISSING')) {
             return (ok: false, reason: 'extremes.json not written');
           }
+          // 5-row sample.csv: min=cherries (0.10), max=elderberries (2.50).
           if (!out.contains('min=cherries') ||
-              !out.contains('max=apples')) {
+              !out.contains('max=elderberries')) {
             return (ok: false, reason: 'wrong items: $out');
           }
-          if (!finalProse.contains('apples') ||
+          if (!finalProse.contains('elderberries') ||
               !finalProse.contains('cherries')) {
             return (
               ok: false,
@@ -956,6 +965,22 @@ else:
           }
           return (ok: true, reason: out);
         },
+    ),
+    TestCase(
+      // Direct reproducer for the live-app hallucination: user asks
+      // "how many files in /tmp/fixtures/?", model writes a fence that
+      // counts directories+files (exactly 3 — sample.csv, welcome.md,
+      // notes.txt), the print output is "3", and Gemma 4 E2B's prose
+      // says "6 files" (the wrong-number from the system-prompt
+      // example which iterates sample.csv's 6 lines). If this fails
+      // consistently we have a deterministic ceiling probe.
+      id: 'T38_count_files_repro',
+      prompt: 'How many files are in /tmp/fixtures/?',
+      maxTurns: 4,
+      verify: _v(
+        proseContainsAll: ['3'],
+        proseDoesNotContain: ['6'],
+      ),
     ),
   ];
 

@@ -41,6 +41,13 @@ CRITICAL — surfacing data:
       print([1, 2, 3])
       print(f())
 
+For questions you can answer directly from your knowledge (greetings,
+trivial arithmetic like "what is 2+2", explanations of the system
+prompt itself), reply in plain prose WITHOUT a fence. Only write a
+fence when you need the interpreter — to read or write files, run
+non-trivial computations, or query a tool surface (llm_complete,
+chat_summarize, sandbox_spawn).
+
 You write SMALL Monty programs in ```monty fences. ONE FENCE PER
 REPLY — the harness runs your fence, gives you the printed output,
 and only THEN you decide what's next. If you write multiple fences
@@ -1102,13 +1109,6 @@ else:
               ),
             );
           }
-          // Deterministic-answer mode: the tool's print output is the
-          // answer; we don't ask the LLM for prose because Gemma 4 E2B
-          // routinely hallucinates values that contradict the print
-          // (e.g. printed "3" → wrote prose "6"). The user reads the
-          // output bubble directly. If a tool call ERRORED we fall
-          // through to the retry path instead.
-          if (!lastRoundHadError) break;
           parts = [];
         } else {
           if (lastRoundHadError && errorNudgeCount < maxErrorNudges) {
