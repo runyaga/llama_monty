@@ -41,13 +41,18 @@ CRITICAL — surfacing data:
       print([1, 2, 3])
       print(f())
 
-You write SMALL Monty programs in ```monty fences. Variables and
-imports persist across fences, so each turn does one step:
+You write SMALL Monty programs in ```monty fences. ONE FENCE PER
+REPLY — the harness runs your fence, gives you the printed output,
+and only THEN you decide what's next. If you write multiple fences
+in a single reply, only the first runs and the rest are wasted.
+Wait for output between steps. Variables and imports persist across
+fences, so each turn does one step:
 
 ```monty
 from pathlib import Path
-data = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
-print(len(data), 'rows; header:', data[0])
+lines = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
+data_rows = lines[1:]                     # exclude header
+print(len(data_rows), 'data rows; header:', lines[0])
 ```
 
 Read the printed output, then write the NEXT small fence using what
@@ -111,9 +116,30 @@ do not report it.
 
 For tasks that genuinely need multiple separate steps (each step
 depends on the previous step's output, or the steps are too big for
-a single fence), you MAY write a checklist to `/tmp/state/PLAN.md`
-to track progress, flipping `- [ ]` → `- [x]` after each step. Don't
-do this for simple tasks — one fence is fine when the answer fits.
+a single fence), use the FILE-BUS pattern. Each step is its own
+small fence that:
+
+  - reads its input from `/tmp/state/0(N-1)_*.json` (or
+    `/tmp/fixtures/...` for step 1), and
+  - writes its output to `/tmp/state/0N_<name>.json` using
+    `Path(...).write_text(json.dumps(data))`.
+
+Number files with two digits (`01_`, `02_`, ...). After the LAST
+data step, write ONE VERIFY fence that reads the final artifact and
+prints its contents:
+
+```monty
+from pathlib import Path
+print(Path('/tmp/state/03_summary.json').read_text())
+```
+
+Then write your prose answer using the EXACT VALUES from that print.
+This way every step is small and self-contained, intermediates are
+inspectable on disk, and you ground your prose against fresh output.
+
+You MAY also write `/tmp/state/PLAN.md` as a checklist if it helps
+you keep track. Don't do this for simple tasks — one fence is fine
+when the answer fits.
 ''';
 
 // ---------------------------------------------------------------------------

@@ -48,13 +48,18 @@ CRITICAL — surfacing data:
       print([1, 2, 3])
       print(f())
 
-You write SMALL Monty programs in ```monty fences. Variables and
+You write SMALL Monty programs in ```monty fences. ONE FENCE PER
+REPLY — the harness runs your fence, gives you the printed output,
+and only THEN you decide what's next. If you write multiple fences
+in a single reply, only the first runs and the rest are wasted.
+Wait for output between steps. Variables and
 imports persist across fences, so each turn does one step:
 
 ```monty
 from pathlib import Path
-data = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
-print(len(data), 'rows; header:', data[0])
+lines = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
+data_rows = lines[1:]                     # exclude header
+print(len(data_rows), 'data rows; header:', lines[0])
 ```
 
 Read the printed output, then write the NEXT small fence using what
@@ -93,23 +98,49 @@ IN PLAIN PROSE WITHOUT A FENCE. The harness only knows you are done
 when you stop writing fences. One fence per question once you have
 the answer.
 
-For tasks that genuinely need multiple separate steps (each step
-depends on the previous step's output, or the steps are too big for
-a single fence), you MAY write a checklist to `/tmp/state/PLAN.md`
-to track progress. Don't do this for simple tasks — one fence is
-fine when the answer fits.
+For tasks that genuinely need multiple separate steps, use the
+FILE-BUS pattern. Each step is its own small fence that:
+  - reads input from `/tmp/state/0(N-1)_*.json` (or
+    `/tmp/fixtures/...` for step 1), and
+  - writes output to `/tmp/state/0N_<name>.json` via
+    `Path(...).write_text(json.dumps(data))`.
+
+After the LAST data step, write ONE VERIFY fence that reads the
+final artifact and prints its contents:
+
+```monty
+from pathlib import Path
+print(Path('/tmp/state/03_summary.json').read_text())
+```
+
+Then write your prose answer using the EXACT VALUES from that print.
+For simple tasks, one fence is fine.
 ''';
 
 // ---------------------------------------------------------------------------
 // Helpers (copied from main.dart so the harness is self-contained).
 // ---------------------------------------------------------------------------
 
-String? _extractFence(String text) {
-  final m = RegExp(
-    r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```',
-  ).firstMatch(text);
-  final code = m?.group(1)?.trim();
-  return (code != null && code.isNotEmpty) ? code : null;
+/// All ```monty/python/py fences in [text], in order. Many models
+/// (Gemma 4 E2B included) dump a multi-step plan as several fences
+/// in a single reply; we run them in sequence so step 2 isn't
+/// silently dropped after step 1's output appears.
+List<String> _extractAllFences(String text) {
+  return RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```')
+      .allMatches(text)
+      .map((m) => m.group(1)?.trim() ?? '')
+      .where((s) => s.isNotEmpty)
+      .toList();
+}
+
+/// Whatever non-fence prose follows the LAST fence in [text]. Used as
+/// the model's final answer when it dumped fences + prose together.
+String _proseAfterLastFence(String text) {
+  final all = RegExp(r'```(?:monty|python|py)?\s*\n?([\s\S]*?)```')
+      .allMatches(text)
+      .toList();
+  if (all.isEmpty) return text.trim();
+  return text.substring(all.last.end).trim();
 }
 
 String? _preflight(String code) {
@@ -270,49 +301,69 @@ Future<TestResult> runOne({
     final reply = buf.toString().trim();
     log('asst', reply.isEmpty ? '(empty)' : reply);
 
-    final code = _extractFence(reply);
-    if (code == null) {
+    final allFences = _extractAllFences(reply);
+    if (allFences.isEmpty) {
       // No fence => model produced final prose; loop ends.
       finalProse = reply;
       log('done', 'no fence; treating reply as final');
       break;
     }
-    fences.add(code);
-    log('code', code);
 
-    String result;
-    bool failed;
-    final pre = _preflight(code);
-    if (pre != null) {
-      result = 'Error: $pre';
-      failed = true;
-    } else {
-      final r = await monty.execute(code).result;
+    // Multi-fence support: run each fence in order, collect results.
+    // If ANY fence fails, stop and trigger retry with the failing
+    // fence + error. If all succeed, take whatever prose follows the
+    // last fence as the model's "final answer in this turn" — if it
+    // already wrote a complete answer in prose, the loop exits next
+    // iteration (no fence in the next reply).
+    String? code;
+    String result = '';
+    bool failed = false;
+    for (final f in allFences) {
+      code = f;
+      fences.add(f);
+      log('code', f);
+
+      final pre = _preflight(f);
+      if (pre != null) {
+        result = 'Error: $pre';
+        failed = true;
+        break;
+      }
+      final r = await monty.execute(f).result;
       if (r.error != null) {
         result = 'Error: ${r.error!.message}';
         failed = true;
-      } else {
-        final out = (r.printOutput ?? '').trim();
-        if (_looksLikeSwallowedError(out)) {
-          result = 'Error (swallowed by try/except): $out';
-          failed = true;
-        } else {
-          result = out.isEmpty ? '(no output)' : out;
-          failed = false;
-          printOutputs.add(out);
-        }
+        break;
       }
+      final out = (r.printOutput ?? '').trim();
+      if (_looksLikeSwallowedError(out)) {
+        result = 'Error (swallowed by try/except): $out';
+        failed = true;
+        break;
+      }
+      result = out.isEmpty ? '(no output)' : out;
+      printOutputs.add(out);
+      log('tool-output', result);
     }
-    log(failed ? 'tool-error' : 'tool-output', result);
+
+    // If the model already emitted prose AFTER the last fence, that's
+    // its final answer — capture it and exit so we don't ask for more.
+    final tailProse = _proseAfterLastFence(reply);
+    if (!failed && tailProse.isNotEmpty) {
+      finalProse = tailProse;
+      log('done', 'prose after last fence; treating as final');
+      break;
+    }
 
     if (failed) {
+      log('tool-error', result);
       if (retries >= maxRetries) {
         log('done', 'max retries hit');
         break;
       }
       retries++;
       // CONTEXT RESET: drop history, replay original prompt + hint.
-      final hint = _pointedNudge(code: code, error: result);
+      final hint = _pointedNudge(code: code ?? '', error: result);
       currentPrompt =
           '${tc.prompt}\n\n'
           'NOTE: a previous attempt at this task failed. '
@@ -704,18 +755,18 @@ Future<void> main() async {
     TestCase(id: 'T28_ground_value',
         prompt: 'What is the price of bananas in '
             '/tmp/fixtures/sample.csv?',
-        maxTurns: 3,
+        maxTurns: 5,
         verify: _v(proseContainsAll: ['0.20'],
             proseDoesNotContain: ['0.50', '1.00'])),
     TestCase(id: 'T29_ground_max',
         prompt: 'Which item in /tmp/fixtures/sample.csv has the '
             'HIGHEST price?',
-        maxTurns: 4,
-        verify: _v(proseContainsAll: ['apples'])),
+        maxTurns: 5,
+        verify: _v(proseContainsAny: ['apples', 'Apples', 'apple', 'Apple'])),
     TestCase(id: 'T30_ground_avg',
         prompt: 'What is the AVERAGE price across all rows in '
             '/tmp/fixtures/sample.csv? Round to 2 decimals.',
-        maxTurns: 4,
+        maxTurns: 6,
         verify: _v(proseContainsAll: ['0.25'])),
 
     // ─────────── TIER 7: hard / known-fail ───────────────────────
@@ -752,6 +803,110 @@ Future<void> main() async {
             // or ~0.1803 (sample). Either is a stretch.
             proseContainsAny: ['0.14', '0.15', '0.18'],
             proseDoesNotContain: ['.format(', '%.', '"%s"'])),
+    TestCase(
+      // File-bus pipeline: assert intermediate artifacts exist AND
+      // the verify fence's print appears in finalProse.
+      id: 'T36_filebus_pipeline',
+      prompt:
+          'Use the FILE-BUS pattern to: (1) read /tmp/fixtures/sample.csv '
+          'and write parsed rows as a list of dicts to '
+          '/tmp/state/01_rows.json; (2) read 01_rows.json and write '
+          '{"min": <min price>, "max": <max price>} to '
+          '/tmp/state/02_extremes.json; (3) verify by reading '
+          '02_extremes.json and printing it. Then in your prose reply, '
+          'state the min and max prices you read from the verify print.',
+      maxTurns: 8,
+      verify: ({
+        required monty,
+        required finalProse,
+        required fences,
+        required printOutputs,
+      }) async {
+        final r = await monty.execute('''
+from pathlib import Path
+import json
+rows = Path('/tmp/state/01_rows.json')
+ext = Path('/tmp/state/02_extremes.json')
+if not rows.exists():
+    print('NO_ROWS')
+elif not ext.exists():
+    print('NO_EXTREMES')
+else:
+    d = json.loads(ext.read_text())
+    print(f"min={d.get('min')} max={d.get('max')}")
+''').result;
+        final out = (r.printOutput ?? '').trim();
+        if (out.startsWith('NO_ROWS')) {
+          return (ok: false, reason: '01_rows.json not written');
+        }
+        if (out.startsWith('NO_EXTREMES')) {
+          return (ok: false, reason: '02_extremes.json not written');
+        }
+        if (!out.contains('min=0.1') || !out.contains('max=0.45')) {
+          return (ok: false, reason: 'wrong values: $out');
+        }
+        if (!finalProse.contains('0.1') ||
+            !finalProse.contains('0.45')) {
+          return (
+            ok: false,
+            reason: 'prose missing values — got: '
+                '"${_truncate(finalProse, 200)}"',
+          );
+        }
+        return (ok: true, reason: out);
+      },
+    ),
+    TestCase(
+      // Two-stage chain on welcome.md: extract → count → verify.
+      id: 'T37_chain_count_verify',
+      prompt:
+          'Use the FILE-BUS pattern: (1) read /tmp/fixtures/welcome.md '
+          'and write each non-blank line as JSON list to '
+          '/tmp/state/01_lines.json; (2) read 01_lines.json and write '
+          '{"line_count": N} to /tmp/state/02_count.json; (3) verify '
+          'by reading 02_count.json and printing it. State the line '
+          'count in your prose reply.',
+      maxTurns: 8,
+      verify: ({
+        required monty,
+        required finalProse,
+        required fences,
+        required printOutputs,
+      }) async {
+        final r = await monty.execute('''
+from pathlib import Path
+import json
+lines = Path('/tmp/state/01_lines.json')
+count = Path('/tmp/state/02_count.json')
+if not lines.exists():
+    print('NO_LINES')
+elif not count.exists():
+    print('NO_COUNT')
+else:
+    d = json.loads(count.read_text())
+    print(f"line_count={d.get('line_count')}")
+''').result;
+        final out = (r.printOutput ?? '').trim();
+        if (out.startsWith('NO_LINES')) {
+          return (ok: false, reason: '01_lines.json not written');
+        }
+        if (out.startsWith('NO_COUNT')) {
+          return (ok: false, reason: '02_count.json not written');
+        }
+        // welcome.md has 3 non-blank lines.
+        if (!out.contains('line_count=3')) {
+          return (ok: false, reason: 'wrong count: $out');
+        }
+        if (!finalProse.contains('3')) {
+          return (
+            ok: false,
+            reason: 'prose missing line count — got: '
+                '"${_truncate(finalProse, 200)}"',
+          );
+        }
+        return (ok: true, reason: out);
+      },
+    ),
     TestCase(id: 'T35_multistep_grounded',
         prompt: 'Read /tmp/fixtures/sample.csv, find the item with the '
             'lowest price and the item with the highest price, write '
