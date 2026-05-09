@@ -923,8 +923,17 @@ final List<BashSpec> bashSpecs = <BashSpec>[
         'Use run_bash to cat /project/huge.bin. Tell me what '
         'happens (if it failed, explain why).',
     knownFail: true,
+    // Verify accepts both "missing"-flavor and "exist"-flavor wording.
+    // The runtime returns the same -4 for missing AND oversize files
+    // (per upstream's "MAX_FILE_BYTES surfaces as a miss" design), so
+    // the model can't structurally distinguish them — it picks
+    // whichever words best describe "stdout was empty + command
+    // failed." Both flavors prove the model articulated the failure.
     verify: _v(
-      proseContainsAny: ['error', 'not found', 'missing', 'large', 'size'],
+      proseContainsAny: [
+        'error', 'not found', 'missing', 'large', 'size',
+        'does not exist', 'empty', 'failed',
+      ],
     ),
     // Skipping canonical — would return -4 (DoS guard at MAX_FILE_BYTES).
   ),
