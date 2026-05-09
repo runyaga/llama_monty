@@ -29,6 +29,23 @@ Rules:
 - The host runs the fence and feeds you the printed output. Do not invent output you have not received yet.
 - Python state persists across turns — variables defined in one fence are available in the next.
 
+## Filesystem
+
+You have a small in-memory filesystem. Use `pathlib`:
+
+```python
+from pathlib import Path
+for p in Path('/fixtures').iterdir():
+    print(p, p.read_text()[:80])
+```
+
+Pre-seeded files at `/fixtures/`:
+- `welcome.md` — short intro to this environment.
+- `sample.csv` — name,quantity,price (5 rows).
+- `notes.txt` — a couple of bullet notes.
+
+You can also write new files anywhere in the in-memory tree.
+
 ## Built-in host functions
 
 Inside the fence you can call these:
@@ -85,6 +102,63 @@ If run_python returns an error:
 
 Never report output or results you did not actually receive from the tool.
 ''';
+
+// ---------------------------------------------------------------------------
+// Seed fixtures (web only — MemoryFileSystem starts empty)
+// ---------------------------------------------------------------------------
+
+const _fixtureWelcome = '''
+# llama_monty — welcome
+
+This is a tiny in-memory filesystem mounted at `/fixtures/`. The model can
+list, read, and write here just like a real disk. Everything lives in this
+browser tab — refresh and it's gone.
+
+Try asking the assistant:
+- "List the files under /fixtures and read welcome.md"
+- "Compute the average of column2 in /fixtures/sample.csv"
+- "Append a TODO to /fixtures/notes.txt"
+''';
+
+const _fixtureSampleCsv = '''
+name,quantity,price
+apples,12,0.45
+bananas,5,0.20
+cherries,30,0.10
+dates,8,1.20
+elderberries,3,2.50
+''';
+
+const _fixtureNotes = '''
+- bridge: tool-call grammar still drops on web
+- chat shell plugin: chat_summarize / chat_reset wired
+- next: streaming + drag-drop fixtures
+''';
+
+/// Plants three small files in `/fixtures/` via Monty's `Path.*` ops so the
+/// LLM has something to read on first launch. Runs the same Python in any
+/// runtime; pass each runtime that needs the fixtures (the agent and the
+/// REPL share the same MemoryFileSystem instance via [defaultOsHandler]).
+Future<void> _seedWebFixtures(MontyRuntime runtime) async {
+  final script = StringBuffer()
+    ..writeln('from pathlib import Path')
+    ..writeln("Path('/fixtures').mkdir(parents=True, exist_ok=True)")
+    ..writeln(_writeFile('/fixtures/welcome.md', _fixtureWelcome))
+    ..writeln(_writeFile('/fixtures/sample.csv', _fixtureSampleCsv))
+    ..writeln(_writeFile('/fixtures/notes.txt', _fixtureNotes));
+  final result = await runtime.execute(script.toString()).result;
+  if (result.error != null) {
+    // ignore: avoid_print
+    print('[app] seed fixtures failed: ${result.error!.message}');
+  }
+}
+
+/// Renders a `Path('...').write_text("""...""")` line with the content
+/// safely escaped for triple-quoted Python.
+String _writeFile(String path, String content) {
+  final escaped = content.replaceAll(r'\', r'\\').replaceAll('"""', r'\"\"\"');
+  return "Path('$path').write_text('''$escaped''')";
+}
 
 // ---------------------------------------------------------------------------
 // Logger
@@ -341,16 +415,40 @@ class _ChatPageState extends State<ChatPage> {
       engineRef: engineRef,
       shell: () => _chatSession!,
     );
+    // Wire the platform-aware OS handler so Python code from the LLM can
+    // access pathlib (Path.read_text / iterdir / write_text), datetime, and
+    // (on native) os.environ. Without this, even `datetime.now()` resolves
+    // to PermissionError.
+    //
+    // We build ONE OsCallHandler and share it across both runtimes so the
+    // chat agent and the REPL see the same filesystem — files the LLM
+    // writes via run_python show up immediately in the REPL, and vice
+    // versa.
+    //
+    // - Native: LocalFileSystem (full disk access) + host env + clock.
+    // - Web:    MemoryFileSystem (in-page) + clock; no env.
+    final sharedOs = defaultOsHandler();
+
     final agentSession = MontyRuntime(
+      os: sharedOs,
       logger: const _ConsoleBridgeLogger(),
       extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
     );
 
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
+      os: sharedOs,
       logger: const _ConsoleBridgeLogger('repl'),
       extensions: [LlamaMontyPlugin(engineRef), chatShellPlugin],
     );
+
+    // On web the fs is empty by default — seed a few fixtures so the LLM
+    // has something to work with out of the box. On native skip seeding;
+    // the user has their real disk available. Only seed once because the
+    // two runtimes share the same OS handler and therefore the same fs.
+    if (kIsWeb) {
+      await _seedWebFixtures(agentSession);
+    }
 
     final runPythonTool = ToolDefinition(
       name: 'run_python',
