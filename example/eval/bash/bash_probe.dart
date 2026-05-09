@@ -1,4 +1,4 @@
-// Direct probe of the wasmtime-spike WasmHostBackend without an LLM in
+// Direct probe of the dart_wasm_sandbox WasmHostBackend without an LLM in
 // the loop. Pins the runtime against drift before we wire it into the
 // agent. Mirrors example/eval/e2e/inputs_probe.dart.
 //
@@ -14,9 +14,9 @@ import 'package:wasm_host_dart/wasm_host.dart';
 import 'package:wasm_host_dart/src/wasm_host_ffi.dart';
 
 // Path-deps: wasm_host_dart loads its dylib relative to repoRoot=..,
-// which assumes cwd is wasmtime-spike/dart. We're running from
+// which assumes cwd is dart_wasm_sandbox/dart. We're running from
 // llama_monty/. Override with the absolute build path.
-const _spikeRoot = '/Users/runyaga/dev/wasmtime-spike';
+const _spikeRoot = '/Users/runyaga/dev/dart_wasm_sandbox';
 const _dylibPath = '$_spikeRoot/host/target/release/libwasm_host.dylib';
 const _wasmPath =
     '$_spikeRoot/guest/target/wasm32-wasip1/release/wasm_guest.wasm';

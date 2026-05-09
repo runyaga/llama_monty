@@ -18,7 +18,7 @@ import 'package:wasm_host_dart/src/wasm_host_ffi.dart';
 import 'package:wasm_host_dart/wasm_host.dart';
 
 const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
-const _spikeRoot = '/Users/runyaga/dev/wasmtime-spike';
+const _spikeRoot = '/Users/runyaga/dev/dart_wasm_sandbox';
 const _dylibPath = '$_spikeRoot/host/target/release/libwasm_host.dylib';
 const _wasmPath =
     '$_spikeRoot/guest/target/wasm32-wasip1/release/wasm_guest.wasm';

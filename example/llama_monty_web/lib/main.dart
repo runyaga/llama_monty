@@ -341,7 +341,7 @@ class _ChatPageState extends State<ChatPage> {
   MontyRuntime? _replRuntime; // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
 
-  // wasmtime-spike's WASM host for run_bash. Opened on app launch,
+  // dart_wasm_sandbox's WASM host for run_bash. Opened on app launch,
   // disposed on tear-down. Persists cwd + VFS across all calls.
   WasmHostBackend? _wasmBashHost;
 
@@ -519,7 +519,7 @@ class _ChatPageState extends State<ChatPage> {
       // find / echo. Anything else returns `<host error -3>`.
       name: 'Bash Programs',
       description:
-          'Drive the wasmtime-spike shell sandbox via run_bash. '
+          'Drive the dart_wasm_sandbox shell sandbox via run_bash. '
           '6 allow-listed commands + && chaining + persistent cwd. '
           'Composes with Python: bash for text/file inspection, '
           'Python for parsing and computation.',
@@ -740,7 +740,7 @@ class _ChatPageState extends State<ChatPage> {
       }),
     );
 
-    // run_bash — wasmtime-spike's allow-listed shell over an in-memory
+    // run_bash — dart_wasm_sandbox's allow-listed shell over an in-memory
     // VFS. Registration is fire-and-forget so model-load completion
     // doesn't wait on the FFI dylib + VFS snapshot (those can each
     // take a few seconds on cold cache). The model may invoke
@@ -2156,7 +2156,7 @@ else:
   // -------------------------------------------------------------------------
 
   /// Walks well-known roots (`/tmp/llama-test/fixtures`, `/tmp/llama_monty*`) via Monty
-  /// Background task: opens the wasmtime-spike WasmHostBackend, loads
+  /// Background task: opens the dart_wasm_sandbox WasmHostBackend, loads
   /// `wasm_guest.wasm`, snapshots `/tmp/llama-test/` into the VFS, and
   /// registers the run_bash HostFunction on [agent]. Fire-and-forget
   /// from `_loadModel` so the model-load doesn't wait on FFI + snapshot
@@ -2170,7 +2170,7 @@ else:
       if (wasmHost == null) {
         _appendChatLog(
           'sys',
-          'run_bash NOT registered — wasmtime-spike artifacts missing.',
+          'run_bash NOT registered — dart_wasm_sandbox artifacts missing.',
         );
         return;
       }

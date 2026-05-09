@@ -1,4 +1,4 @@
-/// `run_bash` host function — exposes the wasmtime-spike's allow-listed
+/// `run_bash` host function — exposes the dart_wasm_sandbox's allow-listed
 /// shell to Python code running inside the agent's MontyRuntime.
 ///
 /// Mirrors the shape of `buildRunScriptFunction` in dart_monty 0.17.1
@@ -14,7 +14,7 @@ import 'package:wasm_host_dart/wasm_host.dart';
 
 /// Builds a `run_bash(cmd: str) -> dict` HostFunction that the agent's
 /// Python code can call to execute an allow-listed shell command in
-/// the wasmtime-spike's WASM sandbox. The returned dict has the
+/// the dart_wasm_sandbox's WASM sandbox. The returned dict has the
 /// keys `exit_code` (0 on success; negative sentinel parsed from the
 /// guest's `<host error -N>` marker on disallowed/failed commands),
 /// `stdout` (captured WASI stdout, with any trailing error marker

@@ -11,12 +11,12 @@ dependencies:
   dart_monty: ^0.17.1
   llamadart: ^0.6.11
   meta: ^1.9.0
-  # wasmtime-spike's cross-backend WASM host. Powers the bash
+  # dart_wasm_sandbox's cross-backend WASM host. Powers the bash
   # competence battery under example/eval/bash/ and the run_bash
   # host fn registration in the web app. Path-dep until the upstream
   # package publishes; see ~/.claude/plans/twinkling-imagining-reddy.md.
   wasm_host_dart:
-    path: ../wasmtime-spike/dart
+    path: ../dart_wasm_sandbox/dart
 
 dev_dependencies:
   lints: ^5.0.0

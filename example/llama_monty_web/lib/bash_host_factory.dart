@@ -1,4 +1,4 @@
-/// Cross-platform opener for the wasmtime-spike `WasmHostBackend`.
+/// Cross-platform opener for the dart_wasm_sandbox `WasmHostBackend`.
 ///
 /// `openWasmHost()` from `package:wasm_host_dart` works fine on web
 /// (no dylib needed) but on native it tries to load the dylib via a
@@ -11,7 +11,7 @@
 ///              to `libwasm_host.dylib`.
 ///   - web:     just delegates to `openWasmHost()`.
 ///
-/// Until the wasmtime-spike publishes (or we wire bundling), the
+/// Until the dart_wasm_sandbox publishes (or we wire bundling), the
 /// native path is hard-coded. Returns `null` if the dylib/wasm
 /// artefacts aren't available — caller logs and skips registration.
 library;

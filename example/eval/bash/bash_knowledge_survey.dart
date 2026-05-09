@@ -10,7 +10,7 @@
 //   - tally per command across all tasks
 //
 // Output is a frequency table of {command -> {attempts, allowed, denied}}
-// that tells us what to ask the wasmtime-spike owner to add to the
+// that tells us what to ask the dart_wasm_sandbox owner to add to the
 // allow-list next.
 //
 // This is observational, not pass/fail. The bench (run_bash_bench.dart)
@@ -28,14 +28,14 @@ import 'package:llamadart/llamadart.dart';
 import 'package:wasm_host_dart/src/wasm_host_ffi.dart';
 
 const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
-const _spikeRoot = '/Users/runyaga/dev/wasmtime-spike';
+const _spikeRoot = '/Users/runyaga/dev/dart_wasm_sandbox';
 const _dylibPath = '$_spikeRoot/host/target/release/libwasm_host.dylib';
 const _wasmPath =
     '$_spikeRoot/guest/target/wasm32-wasip1/release/wasm_guest.wasm';
 
 // IMPORTANT: this prompt does NOT enumerate the allow-list. We want
 // the model to write what it would naturally reach for, then the
-// wasmtime-spike's runtime tells us what was actually accepted.
+// dart_wasm_sandbox's runtime tells us what was actually accepted.
 const _systemPrompt = '''
 You are a coding agent with a Python sandbox. To DO anything, write
 a `\`\`\`monty` fence — the harness extracts and executes the code.
@@ -274,7 +274,7 @@ Future<void> main() async {
       // runtime strips the `<host error -3>` marker out of the stdout
       // field before Python sees it, so we can't detect denial from
       // the captured stdout. Static classification is more honest
-      // anyway: it's the wasmtime-spike's known allow-list.
+      // anyway: it's the dart_wasm_sandbox's known allow-list.
       for (final shellCmd in _extractRunBashLiterals(code)) {
         for (final segment in _splitChained(shellCmd)) {
           final argv0 = _argv0Of(segment);
@@ -314,7 +314,7 @@ Future<void> main() async {
       );
     }
     stdout.writeln(
-      '\nForward this list to the wasmtime-spike owner for allow-list '
+      '\nForward this list to the dart_wasm_sandbox owner for allow-list '
       'expansion candidates.',
     );
   }
