@@ -401,6 +401,116 @@ class _ChatPageState extends State<ChatPage> {
       ],
     ),
     (
+      // Mirrors example/eval/e2e/run_e2e.dart T01-T15: every prompt
+      // expects the model to wrap the answer in print() and echo the
+      // exact value in prose. Reveals print/return-semantics issues.
+      name: 'Print Basics',
+      description:
+          'Literals, basic compute, function results — does the model '
+          'know to wrap data in print() and echo values in prose?',
+      prompts: [
+        // T01-T05 literals
+        'Print the integer 42.',
+        "Print the string 'hello world'.",
+        'Print the float 3.14.',
+        'Print the boolean True.',
+        'Print the value None.',
+        // T06-T10 basic compute
+        'Compute 7 * 8 and print it.',
+        "Print 'hello ' + 'world'.",
+        "Print the length of 'python' using len().",
+        'Print the max of [3, 7, 2, 8, 5].',
+        'Print 22/7 rounded to 4 decimals using round().',
+        // T11-T15 function results
+        'Define square(n) returning n*n. Print square(7).',
+        "Define greet(name) that prints 'hi ' + name. Call greet('alan').",
+        'Define factorial(n) recursively, then print factorial(5).',
+        "Define greet(name='world') returning 'hi ' + name. Print greet().",
+        'Define avg(a, b, c) returning (a+b+c)/3. Print avg(2, 4, 6).',
+      ],
+    ),
+    (
+      // Mirrors T16-T25: state-across-fences and file I/O.
+      name: 'State & Files',
+      description:
+          'Cross-fence variable persistence and file read/write '
+          'patterns — exercises one-fence-at-a-time discipline.',
+      prompts: [
+        // T16-T20 state
+        'In a first fence, set x = 100. In a SECOND fence, print(x + 1).',
+        "Fence 1: define greet(n) returning 'hi ' + n. "
+            "Fence 2: print(greet('a')).",
+        'Fence 1: lst = [1, 2, 3]. Fence 2: print(sum(lst)).',
+        "Fence 1: d = {'a': 1, 'b': 2}. Fence 2: print(d['a'] + d['b']).",
+        'Fence 1: total = 0. Fence 2: total = total + 10. '
+            'Fence 3: print(total).',
+        // T21-T25 files
+        'Print the FIRST non-blank line of /tmp/fixtures/welcome.md.',
+        'Print just the column header line of /tmp/fixtures/sample.csv.',
+        'Print the integer number of DATA rows in /tmp/fixtures/sample.csv '
+            '(excluding the header line).',
+        'Print each filename in /tmp/fixtures/ on its own line.',
+        "Write 'hello' to /tmp/state/g.txt. Read it back and print "
+            'the contents.',
+      ],
+    ),
+    (
+      // Mirrors T26-T30: grounding (prose must echo real values).
+      name: 'Grounding Truths',
+      description:
+          "Tests whether the model's prose answer copies real values "
+          'from tool output (no hallucinated CSV headers, no invented '
+          'row counts).',
+      prompts: [
+        'How many data rows are in /tmp/fixtures/sample.csv '
+            '(excluding the header)?',
+        'What is the column header line of /tmp/fixtures/sample.csv? '
+            'Quote it exactly.',
+        'What is the price of bananas in /tmp/fixtures/sample.csv?',
+        'Which item in /tmp/fixtures/sample.csv has the HIGHEST price?',
+        'What is the AVERAGE price across all rows in '
+            '/tmp/fixtures/sample.csv? Round to 2 decimals.',
+      ],
+    ),
+    (
+      // Mirrors T31-T37: hard / chaining stretches that genuinely
+      // exercise the 2B model's ceiling.
+      name: 'Stretch & Chains',
+      description:
+          "Hard tasks: nested-dict print, em-dash unicode, sort pivot, "
+          'standard deviation, file-bus pipelines. Some may fail with '
+          'Gemma 4 E2B — that is informative.',
+      prompts: [
+        "Print the dict {'a': [1, 2, 3], 'b': {'nested': True}}.",
+        'Print only the line of /tmp/fixtures/welcome.md that contains '
+            'an em-dash (—).',
+        'Print all data rows of /tmp/fixtures/sample.csv sorted by '
+            'price DESCENDING, one row per line.',
+        'Compute the standard deviation of the prices in '
+            '/tmp/fixtures/sample.csv (use math.sqrt). Print the result '
+            'rounded to 4 decimals using round() — do NOT use .format() '
+            'or % formatting.',
+        'Read /tmp/fixtures/sample.csv, find the item with the lowest '
+            'price and the item with the highest price, write '
+            "{'min_item': name, 'max_item': name} as JSON to "
+            '/tmp/state/extremes.json, then in your final reply name '
+            'BOTH items by their actual names from the file.',
+        'Use the FILE-BUS pattern to: (1) read /tmp/fixtures/sample.csv '
+            'and write parsed rows as a list of dicts to '
+            '/tmp/state/01_rows.json; (2) read 01_rows.json and write '
+            "{'min': <min price>, 'max': <max price>} to "
+            '/tmp/state/02_extremes.json; (3) verify by reading '
+            '02_extremes.json and printing it. Then in your prose '
+            'reply, state the min and max prices.',
+        'Use the FILE-BUS pattern: (1) read /tmp/fixtures/welcome.md '
+            'and write each non-blank line as a JSON list to '
+            '/tmp/state/01_lines.json; (2) read 01_lines.json and '
+            "write {'line_count': N} to /tmp/state/02_count.json; "
+            '(3) verify by reading 02_count.json and printing it. '
+            'State the line count in your prose reply.',
+      ],
+    ),
+    (
       name: 'Sandbox Workout',
       description:
           'Exercises files, datetime, json, and multi-step Python — '
@@ -661,12 +771,22 @@ class _ChatPageState extends State<ChatPage> {
         // 4 E2B otherwise tends to fabricate plausible CSV headers
         // and row counts from training data instead of reading the
         // real output above.
+        // Build a hyper-explicit directive that quotes the tool output
+        // verbatim and lists the exact numbers/words the model is
+        // expected to copy. Gemma 4 E2B otherwise picks plausible
+        // values from its training (e.g. "6 files" because sample.csv
+        // has 6 lines) instead of grounding on the actual print.
+        final tokens = _extractTokensFromOutput(display);
+        final tokenHint = tokens.isEmpty
+            ? ''
+            : '\nThe specific value(s) you must quote: '
+                '${tokens.map((t) => '"$t"').join(', ')}.';
         return '$display\n\n'
-            '[harness] Your reply MUST include the exact value(s) the '
-            'user asked about, copied verbatim from the output above. '
-            'Do NOT just say "done", "yes", or "task complete" — those '
-            'are not answers. If the user asked you to print 42, your '
-            'reply is "42" (or a sentence containing "42"). If the '
+            '[harness] The line(s) above are the LITERAL tool output. '
+            'Your reply must copy the relevant value(s) from those '
+            'lines verbatim — do NOT substitute different numbers, '
+            'filenames, or words from elsewhere. Do NOT just say '
+            '"done", "yes", or "task complete".$tokenHint If the '
             'output is insufficient to answer, write the next fence.';
       },
     );
@@ -1373,6 +1493,31 @@ else:
         text: consolidated.toString(),
       ),
     );
+  }
+
+  /// Pulls the concrete "answer-shaped" tokens out of [output] so the
+  /// directive can list them as the literal values the model must echo.
+  /// Picks: integers, decimals, file basenames (a.csv, b.md), and
+  /// short identifier-ish words. Drops common harness/system noise so
+  /// the model doesn't get told to echo "Error" or "header".
+  List<String> _extractTokensFromOutput(String output) {
+    if (output.isEmpty) return const [];
+    final seen = <String>{};
+    final out = <String>[];
+    void add(String s) {
+      if (seen.add(s)) out.add(s);
+    }
+
+    // Numbers (ints / decimals).
+    for (final m in RegExp(r'-?\d+(?:\.\d+)?').allMatches(output)) {
+      add(m.group(0)!);
+    }
+    // File basenames (welcome.md, sample.csv, etc.).
+    for (final m in RegExp(r'\b\w+\.(?:md|txt|csv|json|py)\b').allMatches(output)) {
+      add(m.group(0)!);
+    }
+    // Cap the number of tokens so the directive stays short.
+    return out.take(8).toList();
   }
 
   /// Pre-flight gate for `run_python`: returns a non-null error message
