@@ -14,14 +14,14 @@ import 'package:llamadart/llamadart.dart';
 // Config
 // ---------------------------------------------------------------------------
 
-const _modelUrl = 'models/SmolLM2-1.7B-Instruct-Q4_K_M.gguf';
+const _modelUrl = 'models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _nativeModelPath =
     '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
 You DO have a working filesystem and a working Python interpreter. The
-sandbox mounts `/fixtures/` (read-write, pre-seeded) and `/tmp/`
+sandbox mounts `/tmp/fixtures/` (read-write, pre-seeded) and `/tmp/`
 (read-write). NEVER refuse on grounds of "I am an AI without filesystem
 access" — read/write the files via pathlib.
 
@@ -30,14 +30,14 @@ imports persist across fences, so each turn does one step:
 
 ```monty
 from pathlib import Path
-data = Path('/fixtures/sample.csv').read_text().splitlines()
+data = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
 print(len(data), 'rows; header:', data[0])
 ```
 
 Read the printed output, then write the NEXT small fence using what
 you saw. Don't pack everything into one fence.
 
-Files at /fixtures/: welcome.md, sample.csv (name,quantity,price),
+Files at /tmp/fixtures/: welcome.md, sample.csv (name,quantity,price),
 notes.txt.
 
 For verbose work, hand it to a child sandbox — only the child's
@@ -70,6 +70,12 @@ Also no yield / decorators / del / match-case.
 Allowed modules: math, re, json, datetime, pathlib.
 Every if/for/while/def header ends with `:`. Use simple f-strings
 (no method calls inside braces).
+
+DO NOT wrap calls in try/except just to print the error — let errors
+surface so the system can show them to you and you can fix the
+program. If a fence fails, the harness will hand you back the real
+error and ask for a corrected fence; rewrite the program using
+pathlib instead of apologizing.
 ''';
 
 const _systemPrompt = '''
@@ -98,6 +104,11 @@ If run_python returns an error:
 2. Rewrite the code to avoid it (e.g. replace tuple-unpacking for-loops with index loops)
 3. Call run_python again with the corrected code
 
+DO NOT wrap calls in try/except just to print the error. Let errors
+surface so the system can hand them back to you and you can fix the
+program. Apologizing about "sandbox limitations" is wrong — rewrite
+the code using the supported features and call run_python again.
+
 Never report output or results you did not actually receive from the tool.
 ''';
 
@@ -108,14 +119,14 @@ Never report output or results you did not actually receive from the tool.
 const _fixtureWelcome = '''
 # llama_monty — welcome
 
-This is a tiny in-memory filesystem mounted at `/fixtures/`. The model can
+This is a tiny in-memory filesystem mounted at `/tmp/fixtures/`. The model can
 list, read, and write here just like a real disk. Everything lives in this
 browser tab — refresh and it's gone.
 
 Try asking the assistant:
-- "List the files under /fixtures and read welcome.md"
-- "Compute the average of column2 in /fixtures/sample.csv"
-- "Append a TODO to /fixtures/notes.txt"
+- "List the files under /tmp/fixtures and read welcome.md"
+- "Compute the average of column2 in /tmp/fixtures/sample.csv"
+- "Append a TODO to /tmp/fixtures/notes.txt"
 ''';
 
 const _fixtureSampleCsv = '''
@@ -133,17 +144,17 @@ const _fixtureNotes = '''
 - next: streaming + drag-drop fixtures
 ''';
 
-/// Plants three small files in `/fixtures/` via Monty's `Path.*` ops so the
+/// Plants three small files in `/tmp/fixtures/` via Monty's `Path.*` ops so the
 /// LLM has something to read on first launch. Runs the same Python in any
 /// runtime; pass each runtime that needs the fixtures (the agent and the
 /// REPL share the same MemoryFileSystem instance via [defaultOsHandler]).
-Future<void> _seedWebFixtures(MontyRuntime runtime) async {
+Future<void> _seedFixtures(MontyRuntime runtime) async {
   final script = StringBuffer()
     ..writeln('from pathlib import Path')
-    ..writeln("Path('/fixtures').mkdir(parents=True, exist_ok=True)")
-    ..writeln(_writeFile('/fixtures/welcome.md', _fixtureWelcome))
-    ..writeln(_writeFile('/fixtures/sample.csv', _fixtureSampleCsv))
-    ..writeln(_writeFile('/fixtures/notes.txt', _fixtureNotes));
+    ..writeln("Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)")
+    ..writeln(_writeFile('/tmp/fixtures/welcome.md', _fixtureWelcome))
+    ..writeln(_writeFile('/tmp/fixtures/sample.csv', _fixtureSampleCsv))
+    ..writeln(_writeFile('/tmp/fixtures/notes.txt', _fixtureNotes));
   final result = await runtime.execute(script.toString()).result;
   if (result.error != null) {
     // ignore: avoid_print
@@ -244,7 +255,12 @@ class _ChatPageState extends State<ChatPage> {
   final _inputCtrl = TextEditingController();
   final _modelPathCtrl = TextEditingController(text: _nativeModelPath);
   final _systemPromptCtrl =
-      TextEditingController(text: kIsWeb ? _webSystemPrompt : _systemPrompt);
+      // Both backends use the same prompt: it explicitly lists pathlib
+      // as the filesystem API and forbids `import os` / `with open` /
+      // Python-2 print, which is what Gemma 4 needs to avoid the
+      // try/except-swallowed-error spiral. Keeping a separate weaker
+      // prompt for FFI was a leftover from the SmolLM2 era.
+      TextEditingController(text: _webSystemPrompt);
   final _inputFocus = FocusNode();
   final _chatLog = <({String kind, String text})>[];
   final _scrollCtrl = ScrollController();
@@ -348,13 +364,13 @@ class _ChatPageState extends State<ChatPage> {
           'computing numbers.',
       prompts: [
         // ---- files ------------------------------------------------------
-        'List the files under /fixtures and print each filename + its size in bytes.',
-        'Read /fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
-        'Read /fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
-        'Read /fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
-        'Find the most-expensive item in /fixtures/sample.csv and print "name → price".',
-        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /fixtures/notes.txt, then print the full updated file.',
-        'Write a JSON file to /tmp/llama_monty_files/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
+        'List the files under /tmp/fixtures and print each filename + its size in bytes.',
+        'Read /tmp/fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
+        'Read /tmp/fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
+        'Read /tmp/fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
+        'Find the most-expensive item in /tmp/fixtures/sample.csv and print "name → price".',
+        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /tmp/fixtures/notes.txt, then print the full updated file.',
+        'Write a JSON file to /tmp/llama_monty_files/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /tmp/fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
 
         // ---- datetime ---------------------------------------------------
         'Print today\'s date in ISO format (YYYY-MM-DD).',
@@ -363,10 +379,10 @@ class _ChatPageState extends State<ChatPage> {
         'Print what day-of-week (Monday/Tuesday/etc.) the date 2026-12-25 falls on.',
 
         // ---- multi-step combining files + datetime + json ---------------
-        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /fixtures>]} and print it as JSON.',
-        'Read /fixtures/sample.csv and write a new file /tmp/llama_monty_files/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
-        'Compute SHA-like checksum of /fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
-        'Read /fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
+        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /tmp/fixtures>]} and print it as JSON.',
+        'Read /tmp/fixtures/sample.csv and write a new file /tmp/llama_monty_files/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
+        'Compute SHA-like checksum of /tmp/fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
+        'Read /tmp/fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
       ],
     ),
   ];
@@ -497,7 +513,7 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
-          // Children share the parent's Path. handler so /fixtures/ and
+          // Children share the parent's Path. handler so /tmp/fixtures/ and
           // anything else the parent has mounted is visible to the
           // subagent. Otherwise the default 'isolated' strategy gives
           // children a fresh empty MemoryFileSystem.
@@ -517,7 +533,7 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
-          // Children share the parent's Path. handler so /fixtures/ and
+          // Children share the parent's Path. handler so /tmp/fixtures/ and
           // anything else the parent has mounted is visible to the
           // subagent. Otherwise the default 'isolated' strategy gives
           // children a fresh empty MemoryFileSystem.
@@ -526,13 +542,12 @@ class _ChatPageState extends State<ChatPage> {
       ],
     );
 
-    // On web the fs is empty by default — seed a few fixtures so the LLM
-    // has something to work with out of the box. On native skip seeding;
-    // the user has their real disk available. Only seed once because the
-    // two runtimes share the same OS handler and therefore the same fs.
-    if (kIsWeb) {
-      await _seedWebFixtures(agentSession);
-    }
+    // Seed a tiny fixtures directory at /tmp/fixtures/ so the LLM has
+    // something concrete to read on first launch. /tmp is writable on
+    // both platforms (web's MemoryFileSystem and macOS's real disk).
+    // The two runtimes share the same OS handler so seeding once is
+    // enough.
+    await _seedFixtures(agentSession);
 
     final runPythonTool = ToolDefinition(
       name: 'run_python',
@@ -550,10 +565,17 @@ class _ChatPageState extends State<ChatPage> {
         final code = params.getRequiredString('code');
         _appendChatLog('code', code);
 
-        // (We had a Monty.typeCheck pre-flight here. Removed — it
-        // rejected too much valid code, including patterns the
-        // interpreter actually runs fine. Errors that DO come back
-        // from execute() below are still surfaced to the LLM.)
+        // Pre-flight: catch patterns Monty would otherwise let through
+        // at parse time but fail at runtime (`import os` parses fine,
+        // every `os.*` access AttributeErrors). Weak models wrap such
+        // calls in try/except, swallow the failure, then apologize and
+        // give up. Reject hard up-front so the retry nudge fires with a
+        // pointed rewrite hint.
+        final preflight = _preflightForbidden(code);
+        if (preflight != null) {
+          _appendChatLog('error', preflight);
+          return 'Error: $preflight';
+        }
 
         final result = await agentSession.execute(code).result;
 
@@ -568,6 +590,15 @@ class _ChatPageState extends State<ChatPage> {
           if (result.value case final v? when v is! MontyNone) v.toString(),
         ];
         final out = parts.join('\n').trim();
+        // The model often writes `try: os.listdir(p) except: print('an
+        // error occurred:', e)`. Monty reports success (no exception
+        // bubbled), but the print output IS the error. Treat it as a
+        // failure so the harness's retry nudge fires instead of the LLM
+        // seeing "OK output: An error occurred…" and giving up.
+        if (out.isNotEmpty && _looksLikeSwallowedError(out)) {
+          _appendChatLog('error', out);
+          return 'Error (swallowed by try/except): $out';
+        }
         final display = out.isEmpty ? '(no output)' : out;
         _appendChatLog('output', display);
         return display;
@@ -598,13 +629,13 @@ class _ChatPageState extends State<ChatPage> {
       'Slash commands:  /help  /summarize  /compress  /reset  /history  /files',
     );
 
-    // Also show what's in the seeded /fixtures/ directory so the user
+    // Also show what's in the seeded /tmp/fixtures/ directory so the user
     // knows files are mounted and ready to read.
     if (kIsWeb) {
       try {
         final ls = await agentSession.execute('''
 from pathlib import Path
-root = Path('/fixtures')
+root = Path('/tmp/fixtures')
 if root.exists():
   out = []
   for p in root.iterdir():
@@ -618,7 +649,7 @@ else:
         if (listing.isNotEmpty && listing != '(none)') {
           _appendChatLog(
             'sys',
-            '/fixtures contents:\n$listing\n\n'
+            '/tmp/fixtures contents:\n$listing\n\n'
             'Try: "read welcome.md", "what\'s the average price in '
             'sample.csv", or "summarize notes.txt".',
           );
@@ -685,7 +716,7 @@ else:
       var toolRetries = 0;
       const maxToolRetries = 3;
       var errorNudgeCount = 0;
-      const maxErrorNudges = 2;
+      const maxErrorNudges = 4;
       var lastRoundHadError = false;
 
       while (true) {
@@ -875,12 +906,16 @@ else:
           text = text
               .replaceAll(RegExp(r'<\|channel\>[\s\S]*?<channel\|>'), '')
               .replaceAll('<eos>', '')
+              .replaceAll('<end_of_turn>', '')
+              .replaceAll('<start_of_turn>', '')
               .trim();
 
-          // Web fallback: with grammar-constrained tool calling disabled in
-          // the WebGPU bridge, the LLM emits ```python ... ``` markdown
-          // instead of a structured tool_call. Extract the code and run it.
-          final fenceCode = kIsWeb ? _extractPythonFence(text) : null;
+          // Fence fallback: when the model emits ```monty / ```python
+          // markdown instead of a structured tool call (always on web,
+          // sometimes on FFI when the system prompt heavily nudges
+          // toward fences), extract the code and run it through the
+          // same run_python tool.
+          final fenceCode = _extractPythonFence(text);
           if (fenceCode != null && fenceCode.trim().isNotEmpty) {
             final prose = _stripPythonFence(text).trim();
             if (prose.isNotEmpty) _appendChatLog('assistant', prose);
@@ -894,7 +929,13 @@ else:
               resultStr = 'Error: $e';
               _appendChatLog('error', resultStr);
             }
-            final fenceFailed = resultStr.startsWith('Error:');
+            // Hard failure: tool returned `Error: ...`.
+            // Soft failure: program "succeeded" but its print output looks
+            // like a swallowed exception (e.g. `try: ... except: print('an
+            // error occurred:', e)`). Treat both as failures so the retry
+            // nudge fires and the LLM gets a pointed rewrite hint.
+            final fenceFailed = resultStr.startsWith('Error:') ||
+                _looksLikeSwallowedError(resultStr);
             // Feed the tool result back so the model can react.
             _chatSession!.addMessage(
               LlamaChatMessage.withContent(
@@ -917,9 +958,7 @@ else:
               );
               parts = [
                 LlamaTextContent(
-                  'Your last Monty program produced an error: $resultStr\n'
-                  'Write a corrected program in a ```monty fence. '
-                  'Do not give the answer in prose.',
+                  _pointedNudge(code: fenceCode, error: resultStr),
                 ),
               ];
               continue;
@@ -1001,7 +1040,7 @@ else:
           '  /compress            summarize_v2 then chat_reset with the summary as seed\n'
           '  /reset [seed text]   chat_reset (wipe history; optional seed)\n'
           '  /history             dump the current chat_history()\n'
-          '  /files [path]        list files under /fixtures (or any path)\n'
+          '  /files [path]        list files under /tmp/fixtures (or any path)\n'
           '  /help                this list',
         );
       case '/summarize':
@@ -1060,9 +1099,9 @@ print('--- chat reset, seeded with summary ---')
           _appendChatLog('output', (r.printOutput ?? '').trim());
         }
       case '/files':
-        // List anything under /fixtures/ — the seed dir on web. Argument
+        // List anything under /tmp/fixtures/ — the seed dir on web. Argument
         // (if any) is treated as a different root.
-        final root = argText.isEmpty ? '/fixtures' : argText;
+        final root = argText.isEmpty ? '/tmp/fixtures' : argText;
         _appendChatLog('tool', "list($root)");
         final r = await agent.execute('''
 from pathlib import Path
@@ -1182,6 +1221,121 @@ else:
     // ignore: avoid_print
     print('[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 80 ? 80 : cleaned.length)}');
     return null;
+  }
+
+  /// Pre-flight gate for `run_python`: returns a non-null error message
+  /// if [code] contains a pattern Monty cannot run. Some of these
+  /// (notably `import os`) are accepted by the parser but blow up at
+  /// runtime in ways the model will then catch and silently print —
+  /// hard-failing here forces the retry nudge to fire.
+  String? _preflightForbidden(String code) {
+    if (RegExp(r'(^|\n)\s*import\s+os\b').hasMatch(code) ||
+        RegExp(r'(^|\n)\s*from\s+os\b').hasMatch(code)) {
+      return 'The `os` module is not available in Monty. Use `pathlib`: '
+          '`from pathlib import Path`, then `Path(p).iterdir()` to list '
+          'a directory, `Path(p).read_text()` to read a file, '
+          '`Path(p).write_text(s)` to write a file.';
+    }
+    if (RegExp(r'\bwith\s+open\b').hasMatch(code)) {
+      return 'Context managers (`with`) are not supported. Replace '
+          '`with open(p) as f: data = f.read()` with '
+          '`data = Path(p).read_text()`. Replace '
+          '`with open(p, "w") as f: f.write(s)` with '
+          '`Path(p).write_text(s)`.';
+    }
+    if (RegExp(r'(^|\n)\s*print\s+(?!\()').hasMatch(code)) {
+      return 'Use `print(x)` (a function call with parentheses), NOT '
+          '`print x`. Python 2 syntax is rejected.';
+    }
+    if (RegExp(r'(^|\n)\s*class\s+\w').hasMatch(code)) {
+      return 'The `class` keyword is not supported. Use plain functions '
+          'and dicts instead.';
+    }
+    return null;
+  }
+
+  /// True if [output] looks like a try/except-swallowed Python error
+  /// (the program ran "successfully" but printed its own caught
+  /// exception). Lets the retry nudge fire so the LLM rewrites its
+  /// program instead of treating its own swallowed error as a
+  /// sandbox limitation.
+  bool _looksLikeSwallowedError(String output) {
+    final lower = output.toLowerCase();
+    final patterns = [
+      RegExp(r'\ban error occurred\b'),
+      RegExp(r'\btraceback\b'),
+      RegExp(r'^\s*error\s*:', multiLine: true),
+      RegExp(r'\b(attribute|name|type|value|key|index|module|import|os|file)error\b'),
+      RegExp(r"\bmodule '[^']+' has no attribute\b"),
+      RegExp(r'\bis not defined\b'),
+      RegExp(r'\bno module named\b'),
+      RegExp(r"\bcan't access\b"),
+      RegExp(r'\bpermission denied\b'),
+    ];
+    return patterns.any((p) => p.hasMatch(lower));
+  }
+
+  /// Builds a retry message that calls out the specific forbidden
+  /// patterns found in [code]. Weaker models (SmolLM2-1.7B) ignore the
+  /// generic "produced an error" prompt and re-emit the same `import os`
+  /// / `with open(...)` / `.format()` repeatedly; a pointed rewrite hint
+  /// helps them evolve the program.
+  String _pointedNudge({required String code, required String error}) {
+    final hints = <String>[];
+    if (code.contains('import os')) {
+      hints.add(
+        'Remove `import os` — that module is NOT available. Use `pathlib`: '
+        '`from pathlib import Path`, then `Path(p).read_text()`, '
+        '`Path(p).write_text(s)`, `Path(d).iterdir()`.',
+      );
+    }
+    if (RegExp(r'\bwith\s+open\b').hasMatch(code)) {
+      hints.add(
+        'Replace `with open(p) as f: data = f.read()` with '
+        '`data = Path(p).read_text()`. Replace '
+        '`with open(p, "w") as f: f.write(s)` with `Path(p).write_text(s)`. '
+        'Context managers (`with`) are NOT supported.',
+      );
+    }
+    if (RegExp(r'^\s*print\s+(?!\()', multiLine: true).hasMatch(code)) {
+      hints.add(
+        'Use `print(x)` (a function call with parentheses), NOT `print x`. '
+        'Python 2 syntax is rejected.',
+      );
+    }
+    if (code.contains('.format(')) {
+      hints.add(
+        'Replace `"{:.2f}".format(x)` with `round(x, 2)` or an f-string. '
+        '`.format()` is rejected.',
+      );
+    }
+    if (RegExp(r'"[^"]*"\s*%\s+\w').hasMatch(code) ||
+        RegExp(r"'[^']*'\s*%\s+\w").hasMatch(code)) {
+      hints.add(
+        'Replace `"%.2f" % x` with `round(x, 2)` or an f-string. '
+        '`%` string formatting is rejected.',
+      );
+    }
+    if (RegExp(r'^\s*class\s+\w', multiLine: true).hasMatch(code)) {
+      hints.add(
+        'Remove the `class` definition — classes are rejected. Use plain '
+        'functions and dicts instead.',
+      );
+    }
+    final buf = StringBuffer(
+      'Your last Monty program produced an error: $error\n',
+    );
+    if (hints.isNotEmpty) {
+      buf.writeln('Specific fixes for THIS code:');
+      for (final h in hints) {
+        buf.writeln('  • $h');
+      }
+    }
+    buf.write(
+      'Write a CORRECTED program in a ```monty fence. Do not give the '
+      'answer in prose.',
+    );
+    return buf.toString();
   }
 
   /// Removes the first monty/python fence (and surrounding blank lines)
@@ -1630,7 +1784,7 @@ else:
   // Files panel — visualises the in-memory filesystem the LLM operates on.
   // -------------------------------------------------------------------------
 
-  /// Walks well-known roots (`/fixtures`, `/tmp/llama_monty*`) via Monty
+  /// Walks well-known roots (`/tmp/fixtures`, `/tmp/llama_monty*`) via Monty
   /// pathlib and updates [_filesEntries]. Best-effort: silently no-ops if
   /// the runtime isn't ready yet.
   Future<void> _refreshFiles() async {
@@ -1663,7 +1817,7 @@ def walk(root):
         else:
             walk(str(entry))
 
-for root in ['/fixtures', '/tmp/llama_monty', '/tmp/llama_monty_files']:
+for root in ['/tmp/fixtures', '/tmp/llama_monty', '/tmp/llama_monty_files']:
     walk(root)
 
 print(json.dumps(out))
@@ -1696,7 +1850,7 @@ print(json.dumps(out))
     }
   }
 
-  /// Writes [content] to `/fixtures/<filename>` via Monty's pathlib.
+  /// Writes [content] to `/tmp/fixtures/<filename>` via Monty's pathlib.
   /// Used by both the file-picker upload and the drop-target. Refreshes
   /// the panel after the write so the new file shows up immediately.
   Future<bool> _addFileBytes({
@@ -1708,11 +1862,11 @@ print(json.dumps(out))
     final safeName = filename
         .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
         .replaceAll(RegExp(r'^_+|_+$'), '');
-    final target = '/fixtures/${safeName.isEmpty ? "file.txt" : safeName}';
+    final target = '/tmp/fixtures/${safeName.isEmpty ? "file.txt" : safeName}';
     final escaped = jsonEncode(content);
     final r = await agent.execute('''
 from pathlib import Path
-Path('/fixtures').mkdir(parents=True, exist_ok=True)
+Path('/tmp/fixtures').mkdir(parents=True, exist_ok=True)
 Path(${jsonEncode(target)}).write_text($escaped)
 print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
 ''').result;
@@ -1728,7 +1882,7 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
   }
 
   /// Opens the OS file picker, reads each selected file as text, and
-  /// writes them into `/fixtures/`. Binary files are silently skipped
+  /// writes them into `/tmp/fixtures/`. Binary files are silently skipped
   /// (they'd come through as non-UTF8 strings and Monty's text writer
   /// would reject them).
   Future<void> _pickAndAddFiles() async {
@@ -1751,7 +1905,7 @@ print('wrote', ${jsonEncode(target)}, len(${jsonEncode(content)}), 'bytes')
         }
       }
       if (added > 0) {
-        _appendChatLog('sys', 'Added $added file(s) to /fixtures/');
+        _appendChatLog('sys', 'Added $added file(s) to /tmp/fixtures/');
       }
     } finally {
       setState(() => _filesBusy = false);
