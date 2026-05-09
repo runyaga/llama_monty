@@ -349,7 +349,10 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _autoRun() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
     await _loadModel();
-    await _runExperiment();
+    // Auto-running an experiment on every page load was getting in the
+    // way. Loading the model is enough — the user picks an experiment
+    // from the dropdown and clicks Run, or types a slash command, or
+    // just chats. Press Run if you want the Context Cliff sweep.
   }
 
   Future<void> _runExperiment() async {
