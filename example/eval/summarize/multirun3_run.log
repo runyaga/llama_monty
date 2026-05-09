@@ -1,0 +1,110 @@
+Running build hooks...Running build hooks...Loading model …
+Configuration: runs=3, sampling=temp=1.0/topP=0.95
+
+=== F10 — mixed proper nouns (non-Latin / hyphenated, document failure) ===
+  [run 1/3] baseline: recall=100.0%  neg=100.0%  calls=1  3211ms
+  [run 1/3] v2:       recall=0.0%  neg=100.0%  calls=4  18863ms
+  [run 2/3] baseline: recall=83.3%  neg=100.0%  calls=1  3225ms
+  [run 2/3] v2:       recall=0.0%  neg=100.0%  calls=4  15187ms
+  [run 3/3] baseline: recall=66.7%  neg=100.0%  calls=1  3679ms
+  [run 3/3] v2:       recall=0.0%  neg=100.0%  calls=4  18549ms
+  ─ baseline × 3: recall μ=83.3% σ=13.6% min=66.7% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=0.0% σ=0.0% min=0.0% max=0.0%  neg μ=100.0% σ=0.0%
+
+=== F1 — short coherent (basic intro) ===
+  [run 1/3] baseline: recall=66.7%  neg=100.0%  calls=1  2846ms
+  [run 1/3] v2:       recall=66.7%  neg=100.0%  calls=3  9951ms
+  [run 2/3] baseline: recall=100.0%  neg=100.0%  calls=1  3310ms
+  [run 2/3] v2:       recall=66.7%  neg=100.0%  calls=3  11141ms
+  [run 3/3] baseline: recall=66.7%  neg=100.0%  calls=1  3309ms
+  [run 3/3] v2:       recall=0.0%  neg=100.0%  calls=3  11265ms
+  ─ baseline × 3: recall μ=77.8% σ=15.7% min=66.7% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=44.4% σ=31.4% min=0.0% max=66.7%  neg μ=100.0% σ=0.0%
+
+=== F2 — short coherent (preferences) ===
+  [run 1/3] baseline: recall=100.0%  neg=100.0%  calls=1  3254ms
+  [run 1/3] v2:       recall=75.0%  neg=100.0%  calls=3  11278ms
+  [run 2/3] baseline: recall=0.0%  neg=100.0%  calls=1  590ms
+  [run 2/3] v2:       recall=100.0%  neg=100.0%  calls=3  11828ms
+  [run 3/3] baseline: recall=100.0%  neg=100.0%  calls=1  3235ms
+  [run 3/3] v2:       recall=0.0%  neg=100.0%  calls=3  11012ms
+  ─ baseline × 3: recall μ=66.7% σ=47.1% min=0.0% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=58.3% σ=42.5% min=0.0% max=100.0%  neg μ=100.0% σ=0.0%
+
+=== F3 — short coherent (work context) ===
+  [run 1/3] baseline: recall=100.0%  neg=100.0%  calls=1  3010ms
+  [run 1/3] v2:       recall=0.0%  neg=100.0%  calls=3  11304ms
+  [run 2/3] baseline: recall=100.0%  neg=100.0%  calls=1  3196ms
+  [run 2/3] v2:       recall=0.0%  neg=100.0%  calls=3  10241ms
+  [run 3/3] baseline: recall=100.0%  neg=100.0%  calls=1  2618ms
+  [run 3/3] v2:       recall=100.0%  neg=100.0%  calls=3  11290ms
+  ─ baseline × 3: recall μ=100.0% σ=0.0% min=100.0% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=33.3% σ=47.1% min=0.0% max=100.0%  neg μ=100.0% σ=0.0%
+
+=== F4 — long coherent (single-topic, attention-drift test) ===
+  [run 1/3] baseline: recall=92.3%  neg=100.0%  calls=1  5072ms
+  [run 1/3] v2:       recall=76.9%  neg=100.0%  calls=7  50660ms
+  [run 2/3] baseline: recall=84.6%  neg=100.0%  calls=1  4082ms
+  [run 2/3] v2:       recall=76.9%  neg=100.0%  calls=8  50784ms
+  [run 3/3] baseline: recall=92.3%  neg=100.0%  calls=1  4354ms
+  [run 3/3] v2:       recall=84.6%  neg=100.0%  calls=7  43341ms
+  ─ baseline × 3: recall μ=89.7% σ=3.6% min=84.6% max=92.3%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=79.5% σ=3.6% min=76.9% max=84.6%  neg μ=100.0% σ=0.0%
+
+=== F5 — long coherent (debugging session) ===
+  [run 1/3] baseline: recall=10.0%  neg=100.0%  calls=1  7154ms
+  [run 1/3] v2:       recall=80.0%  neg=100.0%  calls=7  56338ms
+  [run 2/3] baseline: recall=40.0%  neg=100.0%  calls=1  4781ms
+  [run 2/3] v2:       recall=0.0%  neg=100.0%  calls=6  34697ms
+  [run 3/3] baseline: recall=40.0%  neg=100.0%  calls=1  4548ms
+  [run 3/3] v2:       recall=50.0%  neg=100.0%  calls=7  51894ms
+  ─ baseline × 3: recall μ=30.0% σ=14.1% min=10.0% max=40.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=43.3% σ=33.0% min=0.0% max=80.0%  neg μ=100.0% σ=0.0%
+
+=== F6 — long coherent (recipe planning) ===
+  [run 1/3] baseline: recall=100.0%  neg=100.0%  calls=1  6151ms
+  [run 1/3] v2:       recall=10.0%  neg=100.0%  calls=5  25432ms
+  [run 2/3] baseline: recall=100.0%  neg=100.0%  calls=1  6753ms
+  [run 2/3] v2:       recall=30.0%  neg=100.0%  calls=5  60082ms
+  [run 3/3] baseline: recall=30.0%  neg=100.0%  calls=1  6537ms
+  [run 3/3] v2:       recall=90.0%  neg=100.0%  calls=7  37905ms
+  ─ baseline × 3: recall μ=76.7% σ=33.0% min=30.0% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=43.3% σ=34.0% min=10.0% max=90.0%  neg μ=100.0% σ=0.0%
+
+=== F7 — topic switch midway (early facts must survive) ===
+  [run 1/3] baseline: recall=0.0%  neg=100.0%  calls=1  3682ms
+  [run 1/3] v2:       recall=0.0%  neg=100.0%  calls=4  15528ms
+  [run 2/3] baseline: recall=50.0%  neg=100.0%  calls=1  4189ms
+  [run 2/3] v2:       recall=40.0%  neg=100.0%  calls=5  23903ms
+  [run 3/3] baseline: recall=50.0%  neg=100.0%  calls=1  3592ms
+  [run 3/3] v2:       recall=50.0%  neg=100.0%  calls=4  21304ms
+  ─ baseline × 3: recall μ=33.3% σ=23.6% min=0.0% max=50.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=30.0% σ=21.6% min=0.0% max=50.0%  neg μ=100.0% σ=0.0%
+
+=== F8 — explicit negations (the 2B failure mode) ===
+  [run 1/3] baseline: recall=85.7%  neg=80.0%  calls=1  5524ms
+  [run 1/3] v2:       recall=85.7%  neg=80.0%  calls=7  41848ms
+  [run 2/3] baseline: recall=100.0%  neg=100.0%  calls=1  3655ms
+  [run 2/3] v2:       recall=85.7%  neg=80.0%  calls=7  31951ms
+  [run 3/3] baseline: recall=100.0%  neg=100.0%  calls=1  3304ms
+  [run 3/3] v2:       recall=85.7%  neg=80.0%  calls=5  17902ms
+  ─ baseline × 3: recall μ=95.2% σ=6.7% min=85.7% max=100.0%  neg μ=93.3% σ=9.4%
+  ─ v2 × 3: recall μ=85.7% σ=0.0% min=85.7% max=85.7%  neg μ=80.0% σ=0.0%
+
+=== F9 — numeric / date facts (hallucination-prone) ===
+  [run 1/3] baseline: recall=100.0%  neg=100.0%  calls=1  3657ms
+  [run 1/3] v2:       recall=100.0%  neg=100.0%  calls=4  19625ms
+  [run 2/3] baseline: recall=100.0%  neg=100.0%  calls=1  3860ms
+  [run 2/3] v2:       recall=12.5%  neg=100.0%  calls=4  18148ms
+  [run 3/3] baseline: recall=100.0%  neg=100.0%  calls=1  6118ms
+  [run 3/3] v2:       recall=12.5%  neg=100.0%  calls=4  22174ms
+  ─ baseline × 3: recall μ=100.0% σ=0.0% min=100.0% max=100.0%  neg μ=100.0% σ=0.0%
+  ─ v2 × 3: recall μ=41.7% σ=41.2% min=12.5% max=100.0%  neg μ=100.0% σ=0.0%
+
+=== aggregate (mean of per-fixture means) ===
+  baseline:  recall μ=75.3% σ=24.1%  neg μ=99.3% σ=2.0%  calls=30  122496ms
+  v2:  recall μ=46.0% σ=23.3%  neg μ=98.0% σ=6.0%  calls=142  775425ms
+
+=== aggregate (raw across all runs) ===
+  baseline: recall=75.3%  neg=99.3%  calls=30  122496ms
+  v2: recall=46.0%  neg=98.0%  calls=142  775425ms

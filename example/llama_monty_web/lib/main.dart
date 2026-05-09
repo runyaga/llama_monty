@@ -385,6 +385,35 @@ class _ChatPageState extends State<ChatPage> {
         'Find all 3-digit numbers that equal the sum of their digits raised to the power of the digit count',
       ],
     ),
+    (
+      name: 'Sandbox Workout',
+      description:
+          'Exercises files, datetime, json, and multi-step Python — '
+          'shows the LLM USING the sandbox environment, not just '
+          'computing numbers.',
+      prompts: [
+        // ---- files ------------------------------------------------------
+        'List the files under /fixtures and print each filename + its size in bytes.',
+        'Read /fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
+        'Read /fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
+        'Read /fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
+        'Find the most-expensive item in /fixtures/sample.csv and print "name → price".',
+        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /fixtures/notes.txt, then print the full updated file.',
+        'Write a JSON file to /tmp/llama_monty_files/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
+
+        // ---- datetime ---------------------------------------------------
+        'Print today\'s date in ISO format (YYYY-MM-DD).',
+        'Print the current UTC time formatted as "HH:MM:SS UTC". Use datetime.now and strftime if available; otherwise build the string manually.',
+        'Compute and print the number of days between 2026-01-01 and today.',
+        'Print what day-of-week (Monday/Tuesday/etc.) the date 2026-12-25 falls on.',
+
+        // ---- multi-step combining files + datetime + json ---------------
+        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /fixtures>]} and print it as JSON.',
+        'Read /fixtures/sample.csv and write a new file /tmp/llama_monty_files/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
+        'Compute SHA-like checksum of /fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
+        'Read /fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
+      ],
+    ),
   ];
 
   Future<void> _autoRun() async {
