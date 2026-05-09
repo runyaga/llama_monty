@@ -17,12 +17,21 @@ class BashSpec {
     required this.prompt,
     required this.verify,
     this.maxTurns = 4,
+    this.minTurns,
     this.knownFail = false,
   });
   final String id;
   final String prompt;
   final BashVerify verify;
   final int maxTurns;
+
+  /// Minimum number of assistant chat turns the spec requires. If the
+  /// model finishes faster (e.g. answers in one fence + prose), the
+  /// spec is FAILED with reason "used N turns, needed >= M". Used by
+  /// X-tier cross-turn specs to force the model to reason over a
+  /// previous tool result before issuing the next call.
+  final int? minTurns;
+
   final bool knownFail;
 }
 
@@ -556,6 +565,74 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       fenceContains: 'run_bash',
       proseContainsAny: ['gamma', 'GAMMA', 'line 3'],
     ),
+    maxTurns: 6,
+  ),
+
+  // Tier 13 — cross-turn (X-tier). Tasks where the next call's
+  // ARGUMENTS depend on the previous call's RESULT — the model can't
+  // statically write everything in one fence. `minTurns: 2` enforces
+  // that the spec actually used multiple chat turns; specs that
+  // collapse the work into one fence + trailing prose FAIL even if
+  // they happen to land the right answer.
+  BashSpec(
+    id: 'X01_find_then_count_by_name',
+    prompt:
+        'Use run_bash to list all .log files under '
+        '/tmp/llama-test/state. Then, in a SEPARATE follow-up call '
+        '(after you see the names), use run_bash again to count the '
+        'lines in each file by absolute path. Tell me which file has '
+        'more lines, and how many.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAll: ['big.log', '50'],
+    ),
+    minTurns: 2,
+    maxTurns: 6,
+  ),
+  BashSpec(
+    id: 'X02_iterative_refinement',
+    prompt:
+        'Find the top 3 DISTINCT scores in '
+        '/tmp/llama-test/fixtures/scores.txt. Try `cat | sort -nr | '
+        'head -n 3` first. If you see duplicate values in that '
+        'output, refine your approach in a SECOND run_bash call so '
+        "you get THREE DISTINCT numbers. Tell me what they are.",
+    verify: _v(
+      fenceContains: 'run_bash',
+      // 3rd-largest distinct score is 91 (after 99 and 96).
+      proseContainsAll: ['91'],
+    ),
+    minTurns: 2,
+    maxTurns: 6,
+  ),
+  BashSpec(
+    id: 'X03_count_then_extract_first',
+    prompt:
+        'In ONE run_bash call, count the ERROR lines in '
+        '/tmp/llama-test/state/big.log. THEN, in a SEPARATE follow-up '
+        'run_bash call, extract just the FIRST ERROR line. Tell me '
+        'BOTH the count AND the first message text.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAll: ['15', 'auth'],
+    ),
+    minTurns: 2,
+    maxTurns: 6,
+  ),
+  BashSpec(
+    id: 'X04_explore_two_dirs',
+    prompt:
+        'Use run_bash to list /tmp/llama-test/fixtures (call 1). '
+        'Then, in a SEPARATE follow-up call, list '
+        '/tmp/llama-test/state (call 2). Tell me how many TOTAL '
+        'files you saw across both directories.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // fixtures has 3 files (notes/greeting/numbers/scores = 4),
+      // state has 2 (app.log/big.log) = 6 total. Configs is separate.
+      proseContainsAny: ['6', '5', '4'], // model may miss scores
+    ),
+    minTurns: 2,
     maxTurns: 6,
   ),
 ];

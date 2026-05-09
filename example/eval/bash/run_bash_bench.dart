@@ -7,6 +7,7 @@
 // Run: dart run example/eval/bash/run_bash_bench.dart
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:dart_monty_core/dart_monty_core.dart';
@@ -79,13 +80,21 @@ final _fenceRe =
 
 Future<BashResult> _runOne({
   required LlamaEngine engine,
-  required MontyRuntime monty,
   required WasmHostBackend wasmHost,
+  required Uint8List wasmBytes,
   required BashSpec tc,
 }) async {
   // Reset shell + VFS so specs are independent.
   await wasmHost.resetSession();
   await wasmHost.loadTree(bashVfs);
+
+  // Fresh MontyRuntime per replicate. The runtime carries a Python
+  // namespace; without this, variables defined in one spec/replicate
+  // leak into the next. Cheap to construct.
+  final monty = MontyRuntime(os: defaultOsHandler());
+  monty.register(
+    buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
+  );
 
   final session = ChatSession(engine, systemPrompt: _systemPrompt);
   final t = StringBuffer();
@@ -172,16 +181,30 @@ Future<BashResult> _runOne({
     ));
   }
 
+  await monty.dispose();
+
+  final turns = _countAssistantTurns(t.toString());
   final v = tc.verify(
     finalProse: finalProse,
     fences: fences,
     stdouts: stdouts,
   );
+
+  // Cross-turn gate: if the spec sets minTurns, fail the run when
+  // the model finished in fewer chat turns than required (e.g. by
+  // packing the whole solution into one fence + prose).
+  var ok = v.ok;
+  var reason = v.reason;
+  if (tc.minTurns != null && turns < tc.minTurns!) {
+    ok = false;
+    reason = 'used $turns turns; spec needs >= ${tc.minTurns}';
+  }
+
   return BashResult(
     id: tc.id,
-    passed: v.ok,
-    reason: v.reason,
-    turns: _countAssistantTurns(t.toString()),
+    passed: ok,
+    reason: reason,
+    turns: turns,
     transcript: t.toString(),
     knownFail: tc.knownFail,
   );
@@ -213,13 +236,7 @@ Future<void> main(List<String> args) async {
   );
 
   final wasmHost = WasmHostFfi.open(_dylibPath);
-  // The bash bench doesn't need MontyRuntime extensions like
-  // LlamaMontyPlugin / SandboxExtension — only run_bash.
-  final monty = MontyRuntime(os: defaultOsHandler());
   final wasmBytes = File(_wasmPath).readAsBytesSync();
-  monty.register(
-    buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-  );
 
   // Per-spec replicate sweep so single-run flakes become statistical
   // signal. Each spec runs N times against a fresh wasm session +
@@ -235,8 +252,8 @@ Future<void> main(List<String> args) async {
       stdout.writeln('\n========= ${tc.id} (rep $i/$replicates) =========');
       final result = await _runOne(
         engine: engine,
-        monty: monty,
         wasmHost: wasmHost,
+        wasmBytes: wasmBytes,
         tc: tc,
       );
       stdout.writeln(result.transcript);
@@ -291,7 +308,6 @@ Future<void> main(List<String> args) async {
   );
 
   await wasmHost.dispose();
-  await monty.dispose();
   await engine.dispose();
 }
 
