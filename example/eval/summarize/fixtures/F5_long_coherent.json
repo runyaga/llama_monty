@@ -1,0 +1,32 @@
+{
+  "name": "F5 — long coherent (debugging session)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Jamie, debugging a memory leak."},
+    {"role": "assistant", "content": "Hi Jamie. What's the symptom?"},
+    {"role": "user",      "content": "Heap grows ~50MB per hour in a Python service."},
+    {"role": "assistant", "content": "Steady growth or step-function?"},
+    {"role": "user",      "content": "Steady, no obvious spikes."},
+    {"role": "assistant", "content": "Have you taken a tracemalloc snapshot?"},
+    {"role": "user",      "content": "Yes. Top allocator is asyncio.Future objects."},
+    {"role": "assistant", "content": "Sounds like un-awaited futures piling up."},
+    {"role": "user",      "content": "We use a custom retry decorator that wraps coroutines."},
+    {"role": "assistant", "content": "That's the likely culprit."},
+    {"role": "user",      "content": "Service is running on Kubernetes, 4 replicas."},
+    {"role": "assistant", "content": "Doesn't change diagnosis but informs blast radius."},
+    {"role": "user",      "content": "We deploy via ArgoCD."},
+    {"role": "assistant", "content": "OK, easy rollback path then."}
+  ],
+  "facts": [
+    {"subject": "jamie", "predicate": "name", "polarity": "affirm", "object": "Jamie"},
+    {"subject": "jamie", "predicate": "debugging", "polarity": "affirm", "object": "memory leak"},
+    {"subject": "service", "predicate": "language", "polarity": "affirm", "object": "Python"},
+    {"subject": "leak", "predicate": "rate", "polarity": "affirm", "object": "50MB per hour"},
+    {"subject": "leak", "predicate": "shape", "polarity": "affirm", "object": "steady"},
+    {"subject": "tracemalloc", "predicate": "top allocator", "polarity": "affirm", "object": "asyncio.Future"},
+    {"subject": "service", "predicate": "uses", "polarity": "affirm", "object": "custom retry decorator"},
+    {"subject": "service", "predicate": "platform", "polarity": "affirm", "object": "Kubernetes"},
+    {"subject": "service", "predicate": "replicas", "polarity": "affirm", "object": "4"},
+    {"subject": "service", "predicate": "deploy tool", "polarity": "affirm", "object": "ArgoCD"}
+  ]
+}

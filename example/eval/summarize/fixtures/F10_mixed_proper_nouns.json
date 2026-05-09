@@ -1,0 +1,24 @@
+{
+  "name": "F10 — mixed proper nouns (non-Latin / hyphenated, document failure)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Anaïs Müller."},
+    {"role": "assistant", "content": "Hi Anaïs."},
+    {"role": "user",      "content": "I work with Léon Dubois on a translation project."},
+    {"role": "assistant", "content": "Nice. What language pair?"},
+    {"role": "user",      "content": "We translate Kazuo Ishiguro's novels into Português brasileiro."},
+    {"role": "assistant", "content": "That's a delicate craft."},
+    {"role": "user",      "content": "Our publisher is Editora São Paulo."},
+    {"role": "assistant", "content": "OK."},
+    {"role": "user",      "content": "Next title is 'Klara and the Sun'."},
+    {"role": "assistant", "content": "Beautiful book."}
+  ],
+  "facts": [
+    {"subject": "anaïs", "predicate": "name", "polarity": "affirm", "object": "Anaïs Müller"},
+    {"subject": "anaïs", "predicate": "works with", "polarity": "affirm", "object": "Léon Dubois"},
+    {"subject": "project", "predicate": "translates", "polarity": "affirm", "object": "Kazuo Ishiguro"},
+    {"subject": "project", "predicate": "target language", "polarity": "affirm", "object": "Português brasileiro"},
+    {"subject": "publisher", "predicate": "name", "polarity": "affirm", "object": "Editora São Paulo"},
+    {"subject": "next title", "predicate": "name", "polarity": "affirm", "object": "Klara and the Sun"}
+  ]
+}

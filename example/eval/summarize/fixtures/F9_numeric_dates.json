@@ -1,0 +1,28 @@
+{
+  "name": "F9 — numeric / date facts (hallucination-prone)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Reza."},
+    {"role": "assistant", "content": "Hi Reza."},
+    {"role": "user",      "content": "Project deadline is March 14, 2026."},
+    {"role": "assistant", "content": "Mark it down."},
+    {"role": "user",      "content": "Budget is $127,500."},
+    {"role": "assistant", "content": "Got the budget."},
+    {"role": "user",      "content": "Team size: 7 engineers, 2 designers."},
+    {"role": "assistant", "content": "Solid team."},
+    {"role": "user",      "content": "We expect 3,200 daily active users at launch."},
+    {"role": "assistant", "content": "Reasonable target."},
+    {"role": "user",      "content": "Phase 1 ships May 2; phase 2 in August 18."},
+    {"role": "assistant", "content": "Two-phase rollout, got it."}
+  ],
+  "facts": [
+    {"subject": "reza", "predicate": "name", "polarity": "affirm", "object": "Reza"},
+    {"subject": "project", "predicate": "deadline", "polarity": "affirm", "object": "March 14, 2026"},
+    {"subject": "project", "predicate": "budget", "polarity": "affirm", "object": "$127,500"},
+    {"subject": "team", "predicate": "engineers", "polarity": "affirm", "object": "7"},
+    {"subject": "team", "predicate": "designers", "polarity": "affirm", "object": "2"},
+    {"subject": "launch", "predicate": "expected DAU", "polarity": "affirm", "object": "3,200"},
+    {"subject": "phase 1", "predicate": "ships", "polarity": "affirm", "object": "May 2"},
+    {"subject": "phase 2", "predicate": "ships", "polarity": "affirm", "object": "August 18"}
+  ]
+}

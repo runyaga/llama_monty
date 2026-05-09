@@ -1,0 +1,18 @@
+{
+  "name": "F2 — short coherent (preferences)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Maya."},
+    {"role": "assistant", "content": "Hi Maya, what's up?"},
+    {"role": "user",      "content": "I love sci-fi novels and bouldering."},
+    {"role": "assistant", "content": "Nice combo. Any favorite author?"},
+    {"role": "user",      "content": "Ursula K. Le Guin, all day."},
+    {"role": "assistant", "content": "Excellent taste."}
+  ],
+  "facts": [
+    {"subject": "maya", "predicate": "name", "polarity": "affirm", "object": "Maya"},
+    {"subject": "maya", "predicate": "loves", "polarity": "affirm", "object": "sci-fi novels"},
+    {"subject": "maya", "predicate": "loves", "polarity": "affirm", "object": "bouldering"},
+    {"subject": "maya", "predicate": "favorite author", "polarity": "affirm", "object": "Ursula K. Le Guin"}
+  ]
+}

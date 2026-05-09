@@ -1,0 +1,35 @@
+{
+  "name": "F4 — long coherent (single-topic, attention-drift test)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "Hi I'm Priya."},
+    {"role": "assistant", "content": "Hi Priya."},
+    {"role": "user",      "content": "I'm planning a 2-week trip to Japan in November."},
+    {"role": "assistant", "content": "Exciting! What cities are you considering?"},
+    {"role": "user",      "content": "Tokyo, Kyoto, Osaka, and Kanazawa."},
+    {"role": "assistant", "content": "Nice mix of urban and traditional. Are you flying into Haneda or Narita?"},
+    {"role": "user",      "content": "Haneda. Then JR Pass between cities."},
+    {"role": "assistant", "content": "JR Pass is a great choice for that itinerary."},
+    {"role": "user",      "content": "I want to spend the most time in Kyoto."},
+    {"role": "assistant", "content": "Kyoto deserves it. Any specific things you want to see?"},
+    {"role": "user",      "content": "Fushimi Inari, Arashiyama bamboo grove, and a tea ceremony."},
+    {"role": "assistant", "content": "Great picks. Book the tea ceremony in advance."},
+    {"role": "user",      "content": "Will do. My budget is around $4000 USD."},
+    {"role": "assistant", "content": "That should cover a comfortable trip."}
+  ],
+  "facts": [
+    {"subject": "priya", "predicate": "name", "polarity": "affirm", "object": "Priya"},
+    {"subject": "priya", "predicate": "trip destination", "polarity": "affirm", "object": "Japan"},
+    {"subject": "priya", "predicate": "trip duration", "polarity": "affirm", "object": "2 weeks"},
+    {"subject": "priya", "predicate": "trip month", "polarity": "affirm", "object": "November"},
+    {"subject": "priya", "predicate": "visiting", "polarity": "affirm", "object": "Tokyo"},
+    {"subject": "priya", "predicate": "visiting", "polarity": "affirm", "object": "Kyoto"},
+    {"subject": "priya", "predicate": "visiting", "polarity": "affirm", "object": "Osaka"},
+    {"subject": "priya", "predicate": "visiting", "polarity": "affirm", "object": "Kanazawa"},
+    {"subject": "priya", "predicate": "flying into", "polarity": "affirm", "object": "Haneda"},
+    {"subject": "priya", "predicate": "transport", "polarity": "affirm", "object": "JR Pass"},
+    {"subject": "priya", "predicate": "main city", "polarity": "affirm", "object": "Kyoto"},
+    {"subject": "priya", "predicate": "wants to see", "polarity": "affirm", "object": "Fushimi Inari"},
+    {"subject": "priya", "predicate": "budget", "polarity": "affirm", "object": "$4000"}
+  ]
+}

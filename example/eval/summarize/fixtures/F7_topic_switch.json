@@ -1,0 +1,30 @@
+{
+  "name": "F7 — topic switch midway (early facts must survive)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Devon."},
+    {"role": "assistant", "content": "Hi Devon."},
+    {"role": "user",      "content": "I drive a 2018 Honda Civic, hatchback, blue."},
+    {"role": "assistant", "content": "Reliable car."},
+    {"role": "user",      "content": "It needs new brakes soon."},
+    {"role": "assistant", "content": "Check for shop quotes ahead of time."},
+    {"role": "user",      "content": "Anyway — switching topics — I'm also learning Italian."},
+    {"role": "assistant", "content": "Bravo!"},
+    {"role": "user",      "content": "I'm using Duolingo and a tutor twice a week."},
+    {"role": "assistant", "content": "Tutor is the multiplier."},
+    {"role": "user",      "content": "I plan to visit Florence next year."},
+    {"role": "assistant", "content": "Great motivation."}
+  ],
+  "facts": [
+    {"subject": "devon", "predicate": "name", "polarity": "affirm", "object": "Devon"},
+    {"subject": "car", "predicate": "make", "polarity": "affirm", "object": "Honda Civic"},
+    {"subject": "car", "predicate": "year", "polarity": "affirm", "object": "2018"},
+    {"subject": "car", "predicate": "body", "polarity": "affirm", "object": "hatchback"},
+    {"subject": "car", "predicate": "color", "polarity": "affirm", "object": "blue"},
+    {"subject": "car", "predicate": "needs", "polarity": "affirm", "object": "new brakes"},
+    {"subject": "devon", "predicate": "learning", "polarity": "affirm", "object": "Italian"},
+    {"subject": "devon", "predicate": "uses", "polarity": "affirm", "object": "Duolingo"},
+    {"subject": "devon", "predicate": "tutor frequency", "polarity": "affirm", "object": "twice a week"},
+    {"subject": "devon", "predicate": "future trip", "polarity": "affirm", "object": "Florence"}
+  ]
+}

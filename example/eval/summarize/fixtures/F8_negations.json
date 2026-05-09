@@ -1,0 +1,29 @@
+{
+  "name": "F8 — explicit negations (the 2B failure mode)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "I'm Sam."},
+    {"role": "assistant", "content": "Hi Sam."},
+    {"role": "user",      "content": "I am NOT a vegetarian."},
+    {"role": "assistant", "content": "Got it."},
+    {"role": "user",      "content": "But I do not eat fish."},
+    {"role": "assistant", "content": "Noted — no fish."},
+    {"role": "user",      "content": "I am allergic to peanuts."},
+    {"role": "assistant", "content": "Important to remember."},
+    {"role": "user",      "content": "I never drink alcohol."},
+    {"role": "assistant", "content": "Understood."},
+    {"role": "user",      "content": "I cannot eat anything with cilantro — I'm one of those people."},
+    {"role": "assistant", "content": "No cilantro, got it."},
+    {"role": "user",      "content": "Also, we decided AGAINST using Postgres for the new service."},
+    {"role": "assistant", "content": "OK, noted."}
+  ],
+  "facts": [
+    {"subject": "sam", "predicate": "name", "polarity": "affirm", "object": "Sam"},
+    {"subject": "sam", "predicate": "vegetarian", "polarity": "negate", "object": ""},
+    {"subject": "sam", "predicate": "eats fish", "polarity": "negate", "object": ""},
+    {"subject": "sam", "predicate": "allergic to", "polarity": "affirm", "object": "peanuts"},
+    {"subject": "sam", "predicate": "drinks alcohol", "polarity": "negate", "object": ""},
+    {"subject": "sam", "predicate": "eats cilantro", "polarity": "negate", "object": ""},
+    {"subject": "service", "predicate": "uses postgres", "polarity": "negate", "object": ""}
+  ]
+}

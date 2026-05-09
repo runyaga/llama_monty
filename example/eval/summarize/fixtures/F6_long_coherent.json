@@ -1,0 +1,32 @@
+{
+  "name": "F6 — long coherent (recipe planning)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "Hey, I'm Carla."},
+    {"role": "assistant", "content": "Hi Carla."},
+    {"role": "user",      "content": "I'm cooking dinner for 6 people Saturday."},
+    {"role": "assistant", "content": "Any cuisine in mind?"},
+    {"role": "user",      "content": "Italian. Three courses."},
+    {"role": "assistant", "content": "Lovely. Antipasto, primo, secondo?"},
+    {"role": "user",      "content": "Yes. Antipasto: bruschetta with heirloom tomatoes."},
+    {"role": "assistant", "content": "Easy and seasonal."},
+    {"role": "user",      "content": "Primo: handmade pappardelle with mushroom ragu."},
+    {"role": "assistant", "content": "Make pasta the morning of."},
+    {"role": "user",      "content": "Secondo: osso buco with gremolata, polenta on the side."},
+    {"role": "assistant", "content": "Classic pairing."},
+    {"role": "user",      "content": "Wine: Barolo, plus a Pinot Grigio for the antipasto."},
+    {"role": "assistant", "content": "Solid wine plan."}
+  ],
+  "facts": [
+    {"subject": "carla", "predicate": "name", "polarity": "affirm", "object": "Carla"},
+    {"subject": "dinner", "predicate": "guest count", "polarity": "affirm", "object": "6"},
+    {"subject": "dinner", "predicate": "day", "polarity": "affirm", "object": "Saturday"},
+    {"subject": "dinner", "predicate": "cuisine", "polarity": "affirm", "object": "Italian"},
+    {"subject": "antipasto", "predicate": "dish", "polarity": "affirm", "object": "bruschetta"},
+    {"subject": "primo", "predicate": "dish", "polarity": "affirm", "object": "pappardelle with mushroom ragu"},
+    {"subject": "secondo", "predicate": "dish", "polarity": "affirm", "object": "osso buco with gremolata"},
+    {"subject": "secondo", "predicate": "side", "polarity": "affirm", "object": "polenta"},
+    {"subject": "wine", "predicate": "red", "polarity": "affirm", "object": "Barolo"},
+    {"subject": "wine", "predicate": "white", "polarity": "affirm", "object": "Pinot Grigio"}
+  ]
+}

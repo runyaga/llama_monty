@@ -1,0 +1,19 @@
+{
+  "name": "F3 — short coherent (work context)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "Call me Theo."},
+    {"role": "assistant", "content": "Hi Theo."},
+    {"role": "user",      "content": "I'm a backend engineer at a fintech startup."},
+    {"role": "assistant", "content": "What stack do you use?"},
+    {"role": "user",      "content": "Mostly Go and Postgres."},
+    {"role": "assistant", "content": "Solid choices."}
+  ],
+  "facts": [
+    {"subject": "theo", "predicate": "name", "polarity": "affirm", "object": "Theo"},
+    {"subject": "theo", "predicate": "role", "polarity": "affirm", "object": "backend engineer"},
+    {"subject": "theo", "predicate": "industry", "polarity": "affirm", "object": "fintech"},
+    {"subject": "theo", "predicate": "uses", "polarity": "affirm", "object": "Go"},
+    {"subject": "theo", "predicate": "uses", "polarity": "affirm", "object": "Postgres"}
+  ]
+}

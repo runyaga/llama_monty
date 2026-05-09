@@ -1,0 +1,17 @@
+{
+  "name": "F1 — short coherent (basic intro)",
+  "system_prompt": "You are a helpful assistant. Keep replies concise.",
+  "turns": [
+    {"role": "user",      "content": "Hi, my name is Alan."},
+    {"role": "assistant", "content": "Hi Alan! Nice to meet you."},
+    {"role": "user",      "content": "My favorite color is purple."},
+    {"role": "assistant", "content": "Purple is a great color."},
+    {"role": "user",      "content": "I work on a project called llama_monty."},
+    {"role": "assistant", "content": "Cool — what does llama_monty do?"}
+  ],
+  "facts": [
+    {"subject": "alan", "predicate": "name", "polarity": "affirm", "object": "Alan"},
+    {"subject": "alan", "predicate": "favorite color", "polarity": "affirm", "object": "purple"},
+    {"subject": "alan", "predicate": "works on", "polarity": "affirm", "object": "llama_monty"}
+  ]
+}
