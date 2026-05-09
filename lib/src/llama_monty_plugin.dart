@@ -1,10 +1,36 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llamadart/llamadart.dart';
 
 import 'llama_engine_ref.dart';
+
+/// Default path of the streams journal inside Monty's own filesystem. The
+/// plugin appends one JSON object per line for every `open`, `close`, and
+/// natural end-of-stream event, so LLM-written Python can introspect what
+/// the host has actually observed:
+///
+/// ```python
+/// from pathlib import Path
+/// for line in Path('/tmp/llama_monty/streams.jsonl').read_text().splitlines():
+///     print(line)
+/// ```
+///
+/// Lives under `/tmp/` so the same constant works for both:
+/// - native (`LocalFileSystem`): `/tmp/` is writable on Linux/macOS without
+///   elevation; the journal becomes a real on-disk file the host process
+///   can tail.
+/// - web (`MemoryFileSystem`): no real `/tmp` exists, but the in-memory
+///   filesystem accepts arbitrary paths; the journal lives in this tab
+///   only.
+///
+/// The journal also gives the host a tamper-proof reconciliation log: at
+/// any point, comparing journal entries with [LlamaMontyPlugin.streamHandleIds]
+/// shows which handles leaked.
+const String llamaMontyStreamsJournalPath = '/tmp/llama_monty/streams.jsonl';
+const String _llamaMontyStreamsJournalDir = '/tmp/llama_monty';
 
 /// Internal state for a single streaming completion: a buffered queue of
 /// already-arrived chunks plus a waiter the consumer awaits when the queue
@@ -15,6 +41,10 @@ class _StreamHandle {
   Object? error;
   Completer<void>? waiter;
   StreamSubscription<dynamic>? sub;
+
+  /// OS handler captured at `open` time so the background task can append
+  /// the `eos` journal entry without a HostContext.
+  OsCallHandler? os;
 
   void wake() {
     final w = waiter;
@@ -121,6 +151,53 @@ class LlamaMontyPlugin extends MontyExtension {
   ///
   /// See `example/stream_pressure_demo.dart` for the failure modes.
   void disposeAllHandles() => _streams.clear();
+
+  /// Appends one JSON entry to the streams journal. Best-effort — failures
+  /// to read/write the journal don't propagate. Skips silently if [os] is
+  /// null (test context with no OS handler) or if the [Path.] prefix isn't
+  /// served. The journal is plain JSONL so it's both human- and
+  /// LLM-Python-readable via `Path('/journal/streams.jsonl').read_text()`.
+  Future<void> _journal(OsCallHandler? os, Map<String, Object?> entry) async {
+    if (os == null) return;
+    try {
+      // Stamp the host time so journal entries are sortable / debuggable.
+      final stamped = <String, Object?>{
+        'ts': DateTime.now().toUtc().toIso8601String(),
+        ...entry,
+      };
+
+      String existing = '';
+      try {
+        final r = await os('Path.read_text', [llamaMontyStreamsJournalPath], null);
+        if (r is String) existing = r;
+      } on OsCallFileNotFoundError {
+        existing = '';
+      } catch (_) {
+        // Any other read failure: start a fresh file rather than blowing up.
+        existing = '';
+      }
+
+      // Make sure the directory exists. Path.write_text creates parents
+      // implicitly in the bundled fs handler, but be explicit so other
+      // OsCallHandler implementations don't need to.
+      try {
+        await os(
+          'Path.mkdir',
+          [_llamaMontyStreamsJournalDir],
+          {'parents': true, 'exist_ok': true},
+        );
+      } catch (_) {/* ignore — write may still succeed */}
+
+      final next = '$existing${jsonEncode(stamped)}\n';
+      await os(
+        'Path.write_text',
+        [llamaMontyStreamsJournalPath, next],
+        null,
+      );
+    } catch (_) {
+      // Journal failures must never break the stream. Swallow.
+    }
+  }
 
   late final HostFunction _llmCompleteFunction = HostFunction(
     dispatch: DispatchMode.sync,
@@ -314,8 +391,17 @@ class LlamaMontyPlugin extends MontyExtension {
     ];
 
     final id = _nextStreamId++;
-    final handle = _StreamHandle();
+    final handle = _StreamHandle()..os = ctx.os;
     _streams[id] = handle;
+
+    // Plugin-owned journal write — recording WHAT actually opened. The LLM
+    // never gets to skip this, regardless of try/finally or sandbox raise.
+    await _journal(ctx.os, {
+      'event': 'open',
+      'id': id,
+      'prompt_preview':
+          prompt.length > 80 ? '${prompt.substring(0, 80)}…' : prompt,
+    });
 
     // Start the stream behind the engine lock so this serialises with
     // llm_complete / llm_chat / other open streams. The future is *not*
@@ -334,6 +420,13 @@ class LlamaMontyPlugin extends MontyExtension {
       } finally {
         handle.done = true;
         handle.wake();
+        // Background-task EOS: write the natural end of stream regardless
+        // of whether the LLM-written Python ever calls llm_stream_close.
+        await _journal(handle.os, {
+          'event': 'eos',
+          'id': id,
+          if (handle.error != null) 'error': handle.error.toString(),
+        });
       }
     }));
 
@@ -403,7 +496,12 @@ class LlamaMontyPlugin extends MontyExtension {
     HostContext ctx,
   ) async {
     final id = args['handle'] as int;
-    _streams.remove(id);
+    final removed = _streams.remove(id);
+    await _journal(ctx.os, {
+      'event': 'close',
+      'id': id,
+      'present': removed != null,
+    });
     return null;
   }
 }

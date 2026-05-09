@@ -160,6 +160,22 @@ print('opened ids', ids)
   stdout.writeln('leaked handles still in plugin: ${plugin.streamHandleCount}');
   stdout.writeln('ids: ${plugin.streamHandleIds}');
 
+  // Dump the streams journal — the plugin writes one line per open / close /
+  // eos. The LLM-written Python never touches it, so it's tamper-proof.
+  stdout.writeln();
+  stdout.writeln('=== /journal/streams.jsonl ===');
+  final journalScript = '''
+from pathlib import Path
+p = Path('/tmp/llama_monty/streams.jsonl')
+if p.exists():
+  print(p.read_text())
+else:
+  print('(no journal file)')
+''';
+  final j = await monty.execute(journalScript).result;
+  stdout.write(j.printOutput ?? '');
+  if (j.error != null) stdout.writeln('journal read error: ${j.error!.message}');
+
   await monty.dispose();
   await engine.dispose();
 }
