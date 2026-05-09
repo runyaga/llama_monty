@@ -52,9 +52,13 @@ HostFunction buildRunBashFunction({
       final outBytes = await host.run(wasmBytes, stdin: stdinBytes);
       final raw = utf8.decode(outBytes, allowMalformed: true);
 
-      // Errors come back inline as `<host error -N>\n` per the spike's
-      // guest. Pull the code out so callers see a clean `exit_code`
-      // and a `stdout` without the marker.
+      // Errors come back inline as `<host error -N>\n` per the
+      // spike's guest. Pull the code into `exit_code`, strip the
+      // marker out of `stdout`, and surface a human-readable message
+      // in `stderr`. The model reflexively prints stdout and ignores
+      // exit_code; with stderr populated, even reflexive printing
+      // gives the model an actionable signal when chains fail.
+      // (Per upstream PHASE_N1.5_NOTE recommendation.)
       final markerMatch = RegExp(r'<host error (-?\d+)>').firstMatch(raw);
       final exitCode = markerMatch != null
           ? int.parse(markerMatch.group(1)!)
@@ -62,11 +66,19 @@ HostFunction buildRunBashFunction({
       final stdout = markerMatch != null
           ? raw.replaceAll(markerMatch.group(0)!, '').trimRight()
           : raw;
+      final stderr = switch (exitCode) {
+        0 => '',
+        -3 =>
+          'host error -3: command not on allow-list (run `help` to see '
+              'available commands)',
+        -4 => 'host error -4: I/O error (missing file or directory)',
+        _ => 'host error $exitCode',
+      };
 
       return <String, Object?>{
         'exit_code': exitCode,
         'stdout': stdout,
-        'stderr': '',
+        'stderr': stderr,
       };
     },
   );

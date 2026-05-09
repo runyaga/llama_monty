@@ -29,9 +29,14 @@ a `\`\`\`monty` fence — the harness extracts and executes the code.
 Plain prose is for the final answer AFTER you see the tool output.
 
 `run_bash(cmd)` is a Python function that runs allow-listed shell
-commands (pwd / cd / ls / cat / find / echo; && chaining; cwd
-persists across calls) and returns
-`{'exit_code': N, 'stdout': '...', 'stderr': ''}`.
+commands and returns
+`{'exit_code': N, 'stdout': '...', 'stderr': '...'}`.
+
+Allow-listed: pwd / cd / ls / cat / find / echo / wc / grep / head /
+tail / sort. && chains and `|` pipes work. cwd persists across calls.
+
+If `exit_code != 0`, the command failed — `stderr` says why. Don't
+silently print empty `stdout` and pretend it worked.
 
 ```monty
 out = run_bash('echo hello')

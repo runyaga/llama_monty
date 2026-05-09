@@ -29,11 +29,28 @@ class BashSpec {
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
 final Map<String, Uint8List> bashVfs = {
+  // Original small fixtures — kept for backwards-compat with B-tier specs.
   '/tmp/llama-test/fixtures/notes.txt':
       _b('todo:\n  - finish the demo\n  - profit\n'),
   '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
   '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
   '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
+  // Larger fixtures for the A-tier (advanced pipes) and M-tier
+  // (multi-turn). Hand-picked so every assertion has an exact answer:
+  //
+  //   scores.txt (9 nums):  max = 99, distinct count = 7, sum = 193
+  //   big.log (8 lines):    INFO=4, ERROR=3, WARN=1, INFO-distinct=3
+  '/tmp/llama-test/fixtures/scores.txt': _b('5\n12\n3\n99\n42\n7\n5\n12\n8\n'),
+  '/tmp/llama-test/state/big.log': _b(
+    '[INFO] boot\n'
+    '[ERROR] auth\n'
+    '[INFO] ready\n'
+    '[ERROR] timeout\n'
+    '[WARN] mem\n'
+    '[INFO] tick\n'
+    '[ERROR] db\n'
+    '[INFO] tick\n',
+  ),
 };
 
 BashVerify _v({
@@ -222,8 +239,9 @@ final List<BashSpec> bashSpecs = <BashSpec>[
   BashSpec(
     id: 'B12_find_then_cat',
     prompt:
-        'Use run_bash to find files under /tmp/llama-test/state (one call), '
-        'then cat the first one (second call). Tell me the first non-blank '
+        'Issue these as TWO SEPARATE run_bash calls (not one chained pipe). '
+        'Call 1: find files under /tmp/llama-test/state. Call 2: cat the '
+        'app.log file by its absolute path. Tell me the first non-blank '
         'line of that file.',
     verify: _v(
       fenceContains: 'run_bash',
@@ -300,6 +318,102 @@ final List<BashSpec> bashSpecs = <BashSpec>[
       fenceContains: '|',
       stdoutContainsAll: ['1', '2'],
       proseContainsAll: ['1', '2'],
+    ),
+  ),
+
+  // Tier 8 — advanced multi-stage pipes (newly possible post-A1+N1+N1.5).
+  // big.log: INFO=4, ERROR=3, WARN=1, INFO-distinct=3
+  // scores.txt: max=99, distinct=7, sum=193
+  BashSpec(
+    id: 'A01_pipe_grep_count',
+    prompt:
+        'Use run_bash to count how many INFO lines are in '
+        '/tmp/llama-test/state/big.log. Hint: cat | grep | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['4'],
+      proseContainsAll: ['4'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'A02_top_max',
+    prompt:
+        'Use run_bash to print the LARGEST number in '
+        '/tmp/llama-test/fixtures/scores.txt. Hint: sort -nr | head -n 1.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['99'],
+      proseContainsAll: ['99'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'A03_unique_count',
+    prompt:
+        'Use run_bash to count how many DISTINCT numbers are in '
+        '/tmp/llama-test/fixtures/scores.txt. Hint: sort -u | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['7'],
+      proseContainsAll: ['7'],
+    ),
+    maxTurns: 4,
+  ),
+  BashSpec(
+    id: 'A04_chain_4stage',
+    prompt:
+        'Use run_bash with a 4-stage pipe to count the DISTINCT INFO '
+        'lines in /tmp/llama-test/state/big.log. '
+        'Hint: cat | grep INFO | sort -u | wc -l.',
+    verify: _v(
+      fenceContains: '|',
+      stdoutContainsAll: ['3'],
+      proseContainsAll: ['3'],
+    ),
+    maxTurns: 4,
+  ),
+
+  // Tier 9 — multi-turn agentic tasks. Model should take its first
+  // run_bash output, reason over it, and issue follow-up calls.
+  BashSpec(
+    id: 'M01_explore_then_navigate',
+    prompt:
+        'Use run_bash to find files under /tmp/llama-test/state. Then, '
+        'using a SEPARATE run_bash call, cat the file named "big.log". '
+        'Tell me the first INFO line you saw.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      stdoutContainsAll: ['boot'],
+      proseContainsAny: ['boot', 'INFO'],
+    ),
+    maxTurns: 6,
+  ),
+  BashSpec(
+    id: 'M02_count_by_severity',
+    prompt:
+        'Use run_bash to count INFO, ERROR, and WARN lines in '
+        '/tmp/llama-test/state/big.log. You may use one fence with '
+        'multiple run_bash calls or pipes. Tell me the three counts.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      proseContainsAll: ['4', '3', '1'],
+    ),
+    maxTurns: 5,
+  ),
+
+  // Tier 10 — stable rejection sentinel. Per upstream's recommendation:
+  // a knownFail spec that doesn't churn each phase. sed has been on
+  // the deny list since A1 and stays there past N1+N1.5.
+  BashSpec(
+    id: 'B15_disallowed_sed',
+    prompt:
+        'Try to use run_bash with `sed "s/INFO/info/g" '
+        '/tmp/llama-test/state/app.log`. Tell me what happens and '
+        '(if it failed) explain why.',
+    knownFail: true,
+    verify: _v(
+      proseContainsAny: ['error', 'not allow', 'allow-list', 'rejected'],
     ),
   ),
 ];
