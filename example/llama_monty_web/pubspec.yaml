@@ -38,6 +38,12 @@ dependencies:
   llama_monty:
     path: ../..
   dart_monty: ^0.17.1
+  # wasmtime-spike's cross-backend WASM host. Provides openWasmHost() →
+  # WasmHostBackend with a 6-command allow-listed shell over an
+  # in-memory VFS. Path-dep until the package publishes; see
+  # ~/.claude/plans/twinkling-imagining-reddy.md.
+  wasm_host_dart:
+    path: ../../../wasmtime-spike/dart
 
 dev_dependencies:
   flutter_test:
