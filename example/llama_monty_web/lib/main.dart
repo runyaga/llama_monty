@@ -753,8 +753,6 @@ class _ChatPageState extends State<ChatPage> {
     // "unknown function" — same shape it'd raise for any other
     // missing tool. By the time the user is typing the registration
     // is well past done.
-    unawaited(_registerRunBashAsync(agentSession, sharedOs));
-
     // REPL runtime — same surface for ad-hoc tinkering.
     final replRuntime = MontyRuntime(
       os: sharedOs,
@@ -780,7 +778,15 @@ class _ChatPageState extends State<ChatPage> {
     // both platforms (web's MemoryFileSystem and macOS's real disk).
     // The two runtimes share the same OS handler so seeding once is
     // enough.
+    //
+    // MUST happen before _registerRunBashAsync — that helper snapshots
+    // /tmp/llama-test/ into the wasm VFS, and if it races the seed the
+    // bash sandbox sees an empty world and `cat` returns
+    // FileNotFoundError on every fixture. Race fixed in d1c2808.
     await _seedFixtures(agentSession);
+
+    // Now snapshot is safe — fixtures exist on disk.
+    unawaited(_registerRunBashAsync(agentSession, sharedOs));
 
     final runPythonTool = ToolDefinition(
       name: 'run_python',
