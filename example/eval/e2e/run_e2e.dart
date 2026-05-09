@@ -58,9 +58,15 @@ imports persist across fences, so each turn does one step:
 ```monty
 from pathlib import Path
 lines = Path('/tmp/fixtures/sample.csv').read_text().splitlines()
-data_rows = lines[1:]                     # exclude header
-print(len(data_rows), 'data rows; header:', lines[0])
+header = lines[0].split(',')              # ['name','quantity','price']
+data_rows = [r.split(',') for r in lines[1:]]
+price_i = header.index('price')           # index by NAME, not position!
+print('header:', header, 'rows:', len(data_rows))
 ```
+
+When asked about a specific column (e.g. "highest price"), ALWAYS
+look up the column index by NAME via `header.index('price')` — never
+guess the column position.
 
 Read the printed output, then write the NEXT small fence using what
 you saw. Don't pack everything into one fence.
