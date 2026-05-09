@@ -317,77 +317,10 @@ class _ChatPageState extends State<ChatPage> {
         'Find all integers from 1 to 200 divisible by their digit sum — print them',
       ],
     ),
-    (
-      name: 'Wild Card',
-      description:
-          'Fun & surprising — simulations, patterns, recreational math',
-      prompts: [
-        'Simulate the Monty Hall problem 10000 times — print win rates for "always switch" vs "never switch"',
-        'Find all happy numbers between 1 and 100 (sum squares of digits repeatedly until 1 or cycle) — print them',
-        'Print a diamond of * characters with height 9',
-        'Apply the Kaprekar routine to 1234: sort digits descending minus ascending, repeat until 6174 — print each step',
-        'Print the first 20 terms of the Recaman sequence: a[0]=0, a[n]=a[n-1]-n if positive and unseen, else a[n-1]+n',
-        'Compute pi using the Leibniz formula with 500000 terms — print result vs math.pi',
-        'Find all 4-digit perfect squares that are also palindromes — print them',
-        'Simulate flipping a coin 10000 times — print heads count, tails count, and longest heads streak',
-        'Find all numbers from 1 to 200 where the number equals the sum of factorials of its digits',
-        'Find all 3-digit numbers that equal the sum of their digits raised to the power of the digit count',
-      ],
-    ),
-    (
-      // Mirrors example/eval/e2e/run_e2e.dart T01-T15: every prompt
-      // expects the model to wrap the answer in print() and echo the
-      // exact value in prose. Reveals print/return-semantics issues.
-      name: 'Print Basics',
-      description:
-          'Literals, basic compute, function results — does the model '
-          'know to wrap data in print() and echo values in prose?',
-      prompts: [
-        // T01-T05 literals
-        'Print the integer 42.',
-        "Print the string 'hello world'.",
-        'Print the float 3.14.',
-        'Print the boolean True.',
-        'Print the value None.',
-        // T06-T10 basic compute
-        'Compute 7 * 8 and print it.',
-        "Print 'hello ' + 'world'.",
-        "Print the length of 'python' using len().",
-        'Print the max of [3, 7, 2, 8, 5].',
-        'Print 22/7 rounded to 4 decimals using round().',
-        // T11-T15 function results
-        'Define square(n) returning n*n. Print square(7).',
-        "Define greet(name) that prints 'hi ' + name. Call greet('alan').",
-        'Define factorial(n) recursively, then print factorial(5).',
-        "Define greet(name='world') returning 'hi ' + name. Print greet().",
-        'Define avg(a, b, c) returning (a+b+c)/3. Print avg(2, 4, 6).',
-      ],
-    ),
-    (
-      // Mirrors T16-T25: state-across-fences and file I/O.
-      name: 'State & Files',
-      description:
-          'Cross-fence variable persistence and file read/write '
-          'patterns — exercises one-fence-at-a-time discipline.',
-      prompts: [
-        // T16-T20 state
-        'In a first fence, set x = 100. In a SECOND fence, print(x + 1).',
-        "Fence 1: define greet(n) returning 'hi ' + n. "
-            "Fence 2: print(greet('a')).",
-        'Fence 1: lst = [1, 2, 3]. Fence 2: print(sum(lst)).',
-        "Fence 1: d = {'a': 1, 'b': 2}. Fence 2: print(d['a'] + d['b']).",
-        'Fence 1: total = 0. Fence 2: total = total + 10. '
-            'Fence 3: print(total).',
-        // T21-T25 files
-        'Print the FIRST non-blank line of /tmp/llama-test/fixtures/welcome.md.',
-        'Print just the column header line of /tmp/llama-test/fixtures/sample.csv.',
-        'Print the integer number of DATA rows in /tmp/llama-test/fixtures/sample.csv '
-            '(excluding the header line).',
-        'Print each filename in /tmp/llama-test/fixtures/ on its own line.',
-        "Write 'hello' to /tmp/llama-test/state/g.txt. Read it back and print "
-            'the contents.',
-      ],
-    ),
+    // (Cut: Wild Card — recreational dup of Logic Gauntlet.)
+    // (Cut: Print Basics — T01-T15 are e2e harness fixtures, not
+    // user demos; "print 42" is too trivial to surface in the UI.)
+    // (Cut: State & Files — folded into File Workflows below.)
     (
       // Mirrors T26-T30: grounding (prose must echo real values).
       name: 'Grounding Truths',
@@ -445,32 +378,87 @@ class _ChatPageState extends State<ChatPage> {
       ],
     ),
     (
-      name: 'Sandbox Workout',
+      // The flagship demo for the named-scripts capability. Each
+      // prompt exercises the run_script(path, inputs={...}) workflow
+      // against /tmp/llama-test/scripts/ — write a script with a
+      // `def main(...)` body, call it with parameters, get the
+      // last-expression value back. Mirrors
+      // ~/dev/plans/llama-monty-named-scripts.md.
+      name: 'FS Programs + Inputs',
       description:
-          'Exercises files, datetime, json, and multi-step Python — '
-          'shows the LLM USING the sandbox environment, not just '
-          'computing numbers.',
+          'Write parameterised Python scripts to '
+          '/tmp/llama-test/scripts/, then call run_script(path, '
+          'inputs={...}) with different inputs each time. The whole '
+          'point: validated, reusable code lives on disk; the model '
+          'composes it instead of rewriting.',
       prompts: [
-        // ---- files ------------------------------------------------------
-        'List the files under /tmp/llama-test/fixtures and print each filename + its size in bytes.',
-        'Read /tmp/llama-test/fixtures/welcome.md and print only the lines that start with a "-" (the bullet items), with leading "-" stripped.',
-        'Read /tmp/llama-test/fixtures/sample.csv. Header is "name,quantity,price". Compute and print the average price across all data rows, rounded to 2 decimal places. Do NOT import csv.',
-        'Read /tmp/llama-test/fixtures/sample.csv and compute total revenue = sum(quantity * price) across all rows. Print the total rounded to 2 decimals.',
-        'Find the most-expensive item in /tmp/llama-test/fixtures/sample.csv and print "name → price".',
-        'Append the string "audit: reviewed by assistant" as a NEW line at the end of /tmp/llama-test/fixtures/notes.txt, then print the full updated file.',
-        'Write a JSON file to /tmp/llama-test/uploads/summary.json containing {"file_count": N, "total_bytes": M} where N and M describe the contents of /tmp/llama-test/fixtures. Then read it back and pretty-print with json.dumps(indent=2).',
+        // 1. Single script + inputs — the basic shape.
+        'Write a script /tmp/llama-test/scripts/sum_col.py that '
+            'parses a CSV file at `path`, sums the values of column '
+            '`col` (string column name), and returns the sum as a '
+            'float. Last line of the script must be `main(path, col)` '
+            'so run_script can capture the return value. Then call '
+            "run_script('/tmp/llama-test/scripts/sum_col.py', "
+            "inputs={'path': '/tmp/llama-test/fixtures/sample.csv', "
+            "'col': 'price'}) and print the result.",
 
-        // ---- datetime ---------------------------------------------------
+        // 2. REUSE — same script, different inputs (the load-bearing
+        //    demo for the whole capability).
+        "Using the sum_col.py script you just wrote, call run_script "
+            'TWICE on /tmp/llama-test/fixtures/sample.csv: once with '
+            "col='price' and once with col='quantity'. Print BOTH "
+            'returned sums.',
+
+        // 3. Output of one script becomes input of the next.
+        'Write /tmp/llama-test/scripts/load_csv.py that takes `path` '
+            'and returns a list of dicts (one per data row). Then '
+            'write /tmp/llama-test/scripts/top_n.py that takes `rows` '
+            '(list of dicts), `key` (str), and `n` (int) and returns '
+            'the top-n rows by float(row[key]) descending. Chain '
+            'them: call load_csv on sample.csv, pass the result to '
+            "top_n with key='price' and n=2, print the result.",
+
+        // 4. Discovery — list what's available in the scripts library.
+        'List every .py file in /tmp/llama-test/scripts/ and for each '
+            'one print the first non-blank line (docstring or def). '
+            'This is the agent inspecting its own library.',
+      ],
+    ),
+    (
+      name: 'File Workflows',
+      description:
+          'Files / state / multi-step on disk. Replaces the older '
+          '"Sandbox Workout" + "State & Files" experiments — same '
+          'patterns, less duplication.',
+      prompts: [
+        // Single-fence file ops that lean on /tmp/llama-test/fixtures.
+        'List filenames in /tmp/llama-test/fixtures/ with their sizes '
+            'in bytes.',
+        'Read /tmp/llama-test/fixtures/welcome.md and print only the '
+            'lines starting with `-` (bullet items), leading `-` '
+            'stripped.',
+        'Read /tmp/llama-test/fixtures/sample.csv. Compute average '
+            'price across data rows, rounded to 2 decimals. Look up '
+            "the column index by name (header.index('price')).",
+        'Find the most-expensive item in /tmp/llama-test/fixtures/'
+            'sample.csv and print "name → price".',
+
+        // Side-effect tasks that write into /tmp/llama-test/state.
+        'Append "audit: reviewed by assistant" as a NEW line at the '
+            'end of /tmp/llama-test/fixtures/notes.txt, then print '
+            'the full updated file.',
+        'Write a JSON file /tmp/llama-test/state/summary.json '
+            'containing {"file_count": N, "total_bytes": M} for '
+            '/tmp/llama-test/fixtures/. Then read it back and pretty-'
+            'print with json.dumps(indent=2).',
+        'Read /tmp/llama-test/fixtures/sample.csv. Sort rows by price '
+            'descending. Write the result with the same header to '
+            '/tmp/llama-test/state/sorted_by_price.csv. Print the new '
+            'file contents.',
+
+        // datetime — proves the OS handler covers more than just files.
         'Print today\'s date in ISO format (YYYY-MM-DD).',
-        'Print the current UTC time formatted as "HH:MM:SS UTC". Use datetime.now and strftime if available; otherwise build the string manually.',
-        'Compute and print the number of days between 2026-01-01 and today.',
-        'Print what day-of-week (Monday/Tuesday/etc.) the date 2026-12-25 falls on.',
-
-        // ---- multi-step combining files + datetime + json ---------------
-        'Build a dict {"generated_at": <ISO timestamp>, "fixtures": [<list of filenames under /tmp/llama-test/fixtures>]} and print it as JSON.',
-        'Read /tmp/llama-test/fixtures/sample.csv and write a new file /tmp/llama-test/uploads/sorted_by_price.csv with the same header but rows sorted by price descending. Then print the contents of the new file.',
-        'Compute SHA-like checksum of /tmp/llama-test/fixtures/welcome.md by summing the integer values of all its characters mod 1000000007. Print the result.',
-        'Read /tmp/llama-test/fixtures/notes.txt, count word occurrences across the whole file (case-insensitive, ignore punctuation), and print the 5 most common words with their counts.',
+        'Compute the number of days between 2026-01-01 and today.',
       ],
     ),
   ];
