@@ -50,10 +50,10 @@ Python pathlib.
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
 final Map<String, Uint8List> _vfs = {
-  '/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
-  '/data/greeting.txt': _b('hello, world!\n'),
-  '/data/numbers.txt': _b('1\n2\n3\n42\n'),
-  '/logs/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
+  '/tmp/llama-test/fixtures/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
+  '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
+  '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
+  '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
 };
 
 // ---------------------------------------------------------------------------
@@ -327,7 +327,7 @@ final _specs = <BashSpec>[
   BashSpec(
     id: 'B05_cat_numbers',
     prompt:
-        'Use run_bash to cat /data/numbers.txt. Then tell me the LAST number '
+        'Use run_bash to cat /tmp/llama-test/fixtures/numbers.txt. Then tell me the LAST number '
         'in the file.',
     verify: _v(
       fenceContains: 'run_bash',
@@ -339,7 +339,7 @@ final _specs = <BashSpec>[
   // Tier 3 — listings (2)
   BashSpec(
     id: 'B06_ls_data',
-    prompt: 'Use run_bash to list /data. Tell me the filenames you saw.',
+    prompt: 'Use run_bash to list /tmp/llama-test/fixtures. Tell me the filenames you saw.',
     verify: _v(
       fenceContains: 'run_bash',
       stdoutContainsAll: ['greeting.txt', 'numbers.txt'],
@@ -351,28 +351,28 @@ final _specs = <BashSpec>[
     prompt: 'Use run_bash to find / (recursive). Tell me which paths exist.',
     verify: _v(
       fenceContains: 'run_bash',
-      stdoutContainsAll: ['/notes.txt', '/data/greeting.txt'],
-      proseContainsAny: ['/notes.txt', 'notes.txt'],
+      stdoutContainsAll: ['/tmp/llama-test/fixtures/notes.txt', '/tmp/llama-test/fixtures/greeting.txt'],
+      proseContainsAny: ['/tmp/llama-test/fixtures/notes.txt', 'notes.txt'],
     ),
   ),
 
   // Tier 4 — navigation with cd + chaining (3)
   BashSpec(
     id: 'B08_cd_then_pwd',
-    prompt: 'Use run_bash with `cd /data && pwd` and tell me the result.',
+    prompt: 'Use run_bash with `cd /tmp/llama-test/fixtures && pwd` and tell me the result.',
     verify: _v(
-      fenceContains: 'cd /data',
-      stdoutContainsAll: ['/data'],
-      proseContainsAll: ['/data'],
+      fenceContains: 'cd /tmp/llama-test/fixtures',
+      stdoutContainsAll: ['/tmp/llama-test/fixtures'],
+      proseContainsAll: ['/tmp/llama-test/fixtures'],
     ),
     maxTurns: 5,
   ),
   BashSpec(
     id: 'B09_cd_then_ls',
     prompt:
-        'Use run_bash with `cd /data && ls` and tell me what files are there.',
+        'Use run_bash with `cd /tmp/llama-test/fixtures && ls` and tell me what files are there.',
     verify: _v(
-      fenceContains: 'cd /data',
+      fenceContains: 'cd /tmp/llama-test/fixtures',
       stdoutContainsAll: ['greeting.txt', 'numbers.txt'],
       proseContainsAll: ['greeting.txt'],
     ),
@@ -380,10 +380,10 @@ final _specs = <BashSpec>[
   BashSpec(
     id: 'B10_cd_then_cat',
     prompt:
-        'Use run_bash with `cd /data && cat greeting.txt` and tell me the '
+        'Use run_bash with `cd /tmp/llama-test/fixtures && cat greeting.txt` and tell me the '
         'greeting.',
     verify: _v(
-      fenceContains: 'cd /data',
+      fenceContains: 'cd /tmp/llama-test/fixtures',
       stdoutContainsAll: ['hello, world!'],
       proseContainsAny: ['hello, world!', 'hello world'],
     ),
@@ -393,12 +393,12 @@ final _specs = <BashSpec>[
   BashSpec(
     id: 'B11_multi_call_cwd_persists',
     prompt:
-        'Use run_bash TWICE in one fence: first `cd /data` and discard the '
+        'Use run_bash TWICE in one fence: first `cd /tmp/llama-test/fixtures` and discard the '
         'result, then `pwd` to confirm cwd. Tell me what pwd printed.',
     verify: _v(
       fenceContains: 'run_bash',
-      stdoutContainsAll: ['/data'],
-      proseContainsAll: ['/data'],
+      stdoutContainsAll: ['/tmp/llama-test/fixtures'],
+      proseContainsAll: ['/tmp/llama-test/fixtures'],
     ),
     maxTurns: 5,
   ),
@@ -422,7 +422,7 @@ final _specs = <BashSpec>[
   BashSpec(
     id: 'C01_bash_then_python_sum',
     prompt:
-        'Use run_bash to cat /data/numbers.txt, then in the SAME fence '
+        'Use run_bash to cat /tmp/llama-test/fixtures/numbers.txt, then in the SAME fence '
         "use Python to parse the stdout (split lines, int() each) and "
         'print the sum.',
     verify: _v(
@@ -463,7 +463,7 @@ final _specs = <BashSpec>[
   BashSpec(
     id: 'B13_disallowed_grep',
     prompt:
-        'Try to use run_bash with `grep INFO /logs/app.log`. Tell me what '
+        'Try to use run_bash with `grep INFO /tmp/llama-test/state/app.log`. Tell me what '
         "happens and (if it failed) explain why.",
     knownFail: true,
     verify: _v(

@@ -54,9 +54,9 @@ training defaults.
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
 final Map<String, Uint8List> _vfs = {
-  '/notes.txt': _b('todo:\n  - finish the demo\n'),
-  '/data/greeting.txt': _b('hello, world!\n'),
-  '/data/numbers.txt': _b('1\n2\n3\n42\n'),
+  '/tmp/llama-test/fixtures/notes.txt': _b('todo:\n  - finish the demo\n'),
+  '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
+  '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
 };
 
 Future<void> main(List<String> args) async {

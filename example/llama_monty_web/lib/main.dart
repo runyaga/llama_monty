@@ -81,32 +81,34 @@ Quote the EXACT numbers, filenames, and headers you saw in tool
 output. Never substitute training-data defaults. If you didn't
 actually receive a value from a tool call, don't report it.
 
-# Bash sandbox (run_bash)
+# Bash sandbox (`run_bash` — first-class tool)
 
-You also have a tiny shell sandboxed in WASM. Call it from Python:
+`run_bash` is a TOP-LEVEL tool, on the same level as `run_python`.
+For tasks that map cleanly to one shell command, CALL `run_bash`
+DIRECTLY — do not wrap it in `run_python`:
 
-    out = run_bash('cd /data && cat greeting.txt')
-    print(out['stdout'])
+    run_bash(cmd="cd /tmp/llama-test/fixtures && cat welcome.md")
+
+The harness runs it and hands you the captured stdout. Use that
+stdout as the answer.
 
 Allow-listed commands ONLY: `pwd / cd / ls / cat / find / echo`.
-Anything else (sed, awk, grep, pipes `|`, `\$VAR`) is rejected with
-`<host error -3>` in stdout.
+`&&` chaining and relative paths work. The cwd PERSISTS across
+`run_bash` calls. Reset with `/sh-reset` or `cd /`.
 
-`&&` chaining and relative paths work. The current working directory
-PERSISTS across `run_bash` calls — the model can `cd /data` in one
-fence and `cat foo.txt` in the next, and it'll resolve under
-`/data`. Reset with `/sh-reset` or by issuing `cd /` explicitly.
+The wasm sandbox has its own VFS, snapshotted from
+`/tmp/llama-test/` when the agent started. It does NOT see live
+edits the Python side makes — for fresh data, use Python pathlib.
 
-The wasm sandbox has its own VFS, snapshotted from `/tmp/llama-test/`
-when the agent started. It does NOT see live edits the Python side
-makes after that — for fresh data, read via Python pathlib instead.
+Anything outside the allow-list (`sed`, `awk`, `grep`, pipes `|`,
+`\$VAR`, `head`, `tail`, `wc`) is rejected with `<host error -3>`.
+For those tasks, fall back to Python (`run_python` fence) — read
+the file via pathlib and parse in Python.
 
-Returns: `{'exit_code': N, 'stdout': '...', 'stderr': ''}`.
-`exit_code` is 0 on success, negative for the error sentinel.
-
-Use bash when it's strictly more concise (single-command file or
-directory inspection). For computation, mutation, or anything
-involving pipes/awk/sed, use Python.
+When to pick which:
+  - Pure file/dir inspection → `run_bash` directly
+  - Computation, parsing, mutation, chained logic → `run_python`
+  - Both → `run_python` fence containing `run_bash(...)` calls
 
 # Other tools
 
@@ -340,6 +342,7 @@ class _ChatPageState extends State<ChatPage> {
   MontyRuntime? _agentSession; // used by run_python tool in chat
   MontyRuntime? _replRuntime; // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
+  ToolDefinition? _runBashTool;
 
   // dart_wasm_sandbox's WASM host for run_bash. Opened on app launch,
   // disposed on tear-down. Persists cwd + VFS across all calls.
@@ -512,11 +515,11 @@ class _ChatPageState extends State<ChatPage> {
     ),
     (
       // Mirrors example/eval/bash/run_bash_bench.dart's representative
-      // specs. The wasm sandbox has its own VFS pre-loaded with
-      // /notes.txt, /data/greeting.txt, /data/numbers.txt — different
-      // from /tmp/llama-test/. cwd persists across run_bash calls so
-      // the agent can navigate. Allow-listed: pwd / cd / ls / cat /
-      // find / echo. Anything else returns `<host error -3>`.
+      // specs. The wasm sandbox's VFS is snapshotted from
+      // /tmp/llama-test/ at agent start, so bash and Python share the
+      // same paths. cwd persists across run_bash calls. Allow-listed:
+      // pwd / cd / ls / cat / find / echo. Anything else returns
+      // `<host error -3>`.
       name: 'Bash Programs',
       description:
           'Drive the dart_wasm_sandbox shell sandbox via run_bash. '
@@ -527,18 +530,19 @@ class _ChatPageState extends State<ChatPage> {
         // Trivial echo — proves the wiring at all.
         "Use run_bash to print 'hello' via echo. Tell me what it printed.",
         // File read with cd.
-        'Use run_bash with `cd /data && cat greeting.txt` and tell me '
-            'the greeting.',
+        'Use run_bash with `cd /tmp/llama-test/fixtures && cat welcome.md` '
+            'and tell me what the file says.',
         // Multi-step navigation (cwd persists across run_bash calls).
-        'Use run_bash TWICE in one fence: first `cd /data`, then `pwd` '
-            'in a separate run_bash call. Tell me what pwd printed.',
+        'Use run_bash twice: first `cd /tmp/llama-test/fixtures`, then '
+            'in a SEPARATE run_bash call run `pwd`. Tell me what pwd '
+            'printed.',
         // Combined Python + bash — bash output, Python parses.
-        'Use run_bash to cat /data/numbers.txt, then in the SAME fence '
-            'use Python to parse the stdout (split lines, int() each) '
-            'and print the sum.',
+        'Use run_bash to cat /tmp/llama-test/fixtures/sample.csv, then '
+            'in the SAME fence use Python to parse the stdout (split '
+            'lines, count data rows). Print the count.',
         // Discovery via find.
-        'Use run_bash to find every path under /. List the paths in '
-            'your prose answer.',
+        'Use run_bash to find every path under /tmp/llama-test/. List '
+            'the paths in your prose answer.',
       ],
     ),
     (
@@ -862,6 +866,51 @@ class _ChatPageState extends State<ChatPage> {
       },
     );
 
+    // run_bash as a separate STRUCTURED tool so the Gemma 4 chat
+    // template treats it as a first-class call rather than something
+    // the model has to wrap in run_python(code=...). Without this the
+    // model emits `<|tool_call>call:run_bash{cmd:"echo hello"}` which
+    // our run_python tool can't satisfy (`code` is required), the
+    // invoke fails, and the retry loop spins.
+    final runBashTool = ToolDefinition(
+      name: 'run_bash',
+      description:
+          'Run an allow-listed shell command (pwd / cd / ls / cat / '
+          'find / echo) in the wasmtime sandbox. Supports && chaining. '
+          'cwd persists across calls. Returns plain stdout.',
+      parameters: [
+        ToolParam.string(
+          'cmd',
+          description: 'Shell command to run, e.g. `cd /tmp/llama-test/fixtures && cat welcome.md`',
+          required: true,
+        ),
+      ],
+      handler: (params) async {
+        final cmd = params.getRequiredString('cmd');
+        _appendChatLog('tool', 'run_bash: $cmd');
+        final host = _wasmBashHost;
+        if (host == null) {
+          final msg = 'Error: run_bash not registered (host artefacts missing)';
+          _appendChatLog('error', msg);
+          return msg;
+        }
+        try {
+          final wasmBytes = await loadGuestWasmBytes();
+          final outBytes = await host.run(
+            wasmBytes,
+            stdin: Uint8List.fromList(utf8.encode(cmd)),
+          );
+          final raw = utf8.decode(outBytes, allowMalformed: true);
+          _appendChatLog('output', raw.trim());
+          return raw;
+        } on Object catch (e) {
+          final msg = 'Error: $e';
+          _appendChatLog('error', msg);
+          return msg;
+        }
+      },
+    );
+
     final chatSession = ChatSession(
       engine,
       systemPrompt: _systemPromptCtrl.text,
@@ -877,6 +926,7 @@ class _ChatPageState extends State<ChatPage> {
       _agentSession = agentSession;
       _replRuntime = replRuntime;
       _runPythonTool = runPythonTool;
+      _runBashTool = runBashTool;
       _status = 'ready';
       _loadProgress = null;
       _busy = false;
@@ -1005,7 +1055,12 @@ else:
         // grammar sampler is fine, so keep structured tool calls.
         await for (final chunk in _chatSession!.create(
           parts,
-          tools: kIsWeb ? null : [_runPythonTool!],
+          tools: kIsWeb
+              ? null
+              : [
+                  _runPythonTool!,
+                  if (_runBashTool != null) _runBashTool!,
+                ],
         )) {
           final choice = chunk.choices.firstOrNull;
           if (choice?.finishReason != null) finishReason = choice!.finishReason;
@@ -1134,7 +1189,12 @@ else:
               toolRetries = 0;
               // Show a distinct "tool call" entry so it's easy to spot.
               _appendChatLog('tool', tc.name);
-              final submittedCode = effectiveArgs['code']?.toString() ?? '';
+              // Route by tool name. The model can pick run_python OR
+              // run_bash; both are registered as structured tools.
+              final isBash = tc.name == 'run_bash';
+              final submittedCode = isBash
+                  ? (effectiveArgs['cmd']?.toString() ?? '')
+                  : (effectiveArgs['code']?.toString() ?? '');
               if (submittedCode.isNotEmpty &&
                   submittedCode == lastSubmittedCode) {
                 _appendChatLog(
@@ -1145,9 +1205,10 @@ else:
                 break;
               }
               lastSubmittedCode = submittedCode;
+              final tool = isBash ? _runBashTool! : _runPythonTool!;
               try {
                 resultStr =
-                    await _runPythonTool!.invoke(effectiveArgs) as String? ??
+                    await tool.invoke(effectiveArgs) as String? ??
                     '(no output)';
               } catch (e) {
                 resultStr = 'Error: $e';

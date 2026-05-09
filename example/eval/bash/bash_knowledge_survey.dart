@@ -1,8 +1,7 @@
 // Survey: which shell commands does Gemma 4 E2B reach for?
 //
-// We give the model 15 shell-flavoured tasks against the bootstrapped
-// VFS (the same /notes.txt, /data/{greeting,numbers}.txt, /logs/app.log
-// shape the bench uses). The model is told it has run_bash but NOT
+// We give the model 15 shell-flavoured tasks against a VFS rooted at
+// /tmp/llama-test/ — same world the Python sandbox sees. The model is told it has run_bash but NOT
 // which commands are allow-listed. We record:
 //   - the bash command(s) the model wrote (the argv0)
 //   - whether they ran successfully or got `<host error -3>` from the
@@ -45,9 +44,9 @@ a `\`\`\`monty` fence — the harness extracts and executes the code.
 sandboxed and runs over a small in-memory VFS:
 
   /notes.txt              "todo:\\n  - finish the demo\\n  - profit\\n"
-  /data/greeting.txt      "hello, world!\\n"
-  /data/numbers.txt       "1\\n2\\n3\\n42\\n"
-  /logs/app.log           "[INFO] booted\\n[ERROR] oh no\\n"
+  /tmp/llama-test/fixtures/greeting.txt      "hello, world!\\n"
+  /tmp/llama-test/fixtures/numbers.txt       "1\\n2\\n3\\n42\\n"
+  /tmp/llama-test/state/app.log           "[INFO] booted\\n[ERROR] oh no\\n"
 
 Use whatever shell command is most natural for each task. If a
 command isn't supported, the response will say `<host error -3>`.
@@ -66,10 +65,10 @@ output — those are hallucinations. Only `\`\`\`monty` fences.
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
 final Map<String, Uint8List> _vfs = {
-  '/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
-  '/data/greeting.txt': _b('hello, world!\n'),
-  '/data/numbers.txt': _b('1\n2\n3\n42\n'),
-  '/logs/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
+  '/tmp/llama-test/fixtures/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
+  '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
+  '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
+  '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
 };
 
 /// Tasks that span common shell idioms. Each is open-ended — model
@@ -79,31 +78,31 @@ const _tasks = <({String id, String prompt})>[
   (
     id: 'T01_search_text',
     prompt:
-        'Use run_bash to find every line in /logs/app.log that contains '
+        'Use run_bash to find every line in /tmp/llama-test/state/app.log that contains '
         '"ERROR". Tell me what you found.',
   ),
   (
     id: 'T02_first_line',
     prompt:
-        'Use run_bash to print only the FIRST line of /data/numbers.txt. '
+        'Use run_bash to print only the FIRST line of /tmp/llama-test/fixtures/numbers.txt. '
         'Tell me what it is.',
   ),
   (
     id: 'T03_last_line',
     prompt:
-        'Use run_bash to print only the LAST line of /data/numbers.txt. '
+        'Use run_bash to print only the LAST line of /tmp/llama-test/fixtures/numbers.txt. '
         'Tell me what it is.',
   ),
   (
     id: 'T04_count_lines',
     prompt:
-        'Use run_bash to count how many lines /data/numbers.txt has. '
+        'Use run_bash to count how many lines /tmp/llama-test/fixtures/numbers.txt has. '
         'Tell me the count.',
   ),
   (
     id: 'T05_count_chars',
     prompt:
-        'Use run_bash to count how many bytes /data/greeting.txt has. '
+        'Use run_bash to count how many bytes /tmp/llama-test/fixtures/greeting.txt has. '
         'Tell me the byte count.',
   ),
   (
@@ -119,31 +118,31 @@ const _tasks = <({String id, String prompt})>[
   (
     id: 'T08_grep_inverse',
     prompt:
-        'Use run_bash to print every line of /logs/app.log that does NOT '
+        'Use run_bash to print every line of /tmp/llama-test/state/app.log that does NOT '
         'contain "INFO". Tell me what you found.',
   ),
   (
     id: 'T09_sort',
     prompt:
-        'Use run_bash to print the contents of /data/numbers.txt sorted '
+        'Use run_bash to print the contents of /tmp/llama-test/fixtures/numbers.txt sorted '
         'numerically. Tell me what you printed.',
   ),
   (
     id: 'T10_replace_text',
     prompt:
-        'Use run_bash to replace every "INFO" with "info" in /logs/app.log '
+        'Use run_bash to replace every "INFO" with "info" in /tmp/llama-test/state/app.log '
         'and print the result. (Do not modify the file on disk.)',
   ),
   (
     id: 'T11_word_count',
     prompt:
-        'Use run_bash to count the number of words in /data/greeting.txt. '
+        'Use run_bash to count the number of words in /tmp/llama-test/fixtures/greeting.txt. '
         'Tell me the count.',
   ),
   (
     id: 'T12_pipe_chain',
     prompt:
-        'Use run_bash to print just the first 2 lines of /data/numbers.txt '
+        'Use run_bash to print just the first 2 lines of /tmp/llama-test/fixtures/numbers.txt '
         'using a pipe (cat | head, or similar). Tell me what you got.',
   ),
   (
@@ -157,13 +156,13 @@ const _tasks = <({String id, String prompt})>[
     id: 'T14_sum_column',
     prompt:
         'Use run_bash to compute the SUM of the integers in '
-        '/data/numbers.txt. (Hint: awk is the canonical tool.) '
+        '/tmp/llama-test/fixtures/numbers.txt. (Hint: awk is the canonical tool.) '
         'Tell me the sum.',
   ),
   (
     id: 'T15_diff',
     prompt:
-        'Use run_bash to compare /data/greeting.txt against itself; should '
+        'Use run_bash to compare /tmp/llama-test/fixtures/greeting.txt against itself; should '
         'show no differences. Tell me what diff said.',
   ),
 ];

@@ -24,10 +24,10 @@ const _wasmPath =
 Uint8List _b(String s) => Uint8List.fromList(s.codeUnits);
 
 final Map<String, Uint8List> _fixtureVfs = {
-  '/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
-  '/data/numbers.txt': _b('1\n2\n3\n42\n'),
-  '/data/greeting.txt': _b('hello, world!\n'),
-  '/logs/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
+  '/tmp/llama-test/fixtures/notes.txt': _b('todo:\n  - finish the demo\n  - profit\n'),
+  '/tmp/llama-test/fixtures/numbers.txt': _b('1\n2\n3\n42\n'),
+  '/tmp/llama-test/fixtures/greeting.txt': _b('hello, world!\n'),
+  '/tmp/llama-test/state/app.log': _b('[INFO] booted\n[ERROR] oh no\n'),
 };
 
 Future<String> _exec(WasmHostBackend host, Uint8List wasmBytes, String cmd) async {
@@ -74,35 +74,37 @@ Future<void> main() async {
         '/\n');
 
     // P3 — cd then pwd in same call (cwd persists within && chain)
-    _expect('P3 cd /data && pwd',
-        await _exec(host, wasmBytes, 'cd /data && pwd'),
-        '/data\n');
+    _expect('P3 cd /tmp/llama-test/fixtures && pwd',
+        await _exec(host, wasmBytes, 'cd /tmp/llama-test/fixtures && pwd'),
+        '/tmp/llama-test/fixtures\n');
 
     // P4 — cwd persists across SEPARATE run() calls
     _expect('P4 cwd persists across run()',
         await _exec(host, wasmBytes, 'pwd'),
-        '/data\n');
+        '/tmp/llama-test/fixtures\n');
 
-    // P5 — cat with relative path (resolves under cwd=/data)
+    // P5 — cat with relative path (resolves under cwd=/tmp/llama-test/fixtures)
     _expect('P5 cat greeting.txt (relative)',
         await _exec(host, wasmBytes, 'cat greeting.txt'),
         'hello, world!\n');
 
     // P6 — cat with absolute path
-    _expect('P6 cat /notes.txt (absolute)',
-        await _exec(host, wasmBytes, 'cat /notes.txt'),
+    _expect('P6 cat /tmp/llama-test/fixtures/notes.txt (absolute)',
+        await _exec(host, wasmBytes,
+            'cat /tmp/llama-test/fixtures/notes.txt'),
         'todo:\n  - finish the demo\n  - profit\n');
 
-    // P7 — ls
+    // P7 — ls (cwd is /tmp/llama-test/fixtures from P3)
     final ls = await _exec(host, wasmBytes, 'ls');
     final lsLines = ls.split('\n').where((l) => l.isNotEmpty).toList()..sort();
-    _expect('P7 ls (sorted)', lsLines.join(','), 'greeting.txt,numbers.txt');
+    _expect('P7 ls (sorted)', lsLines.join(','),
+        'greeting.txt,notes.txt,numbers.txt');
 
     // P8 — find from root walks the tree
     final findOut = await _exec(host, wasmBytes, 'find /');
-    final hasNotes = findOut.contains('/notes.txt');
-    final hasNumbers = findOut.contains('/data/numbers.txt');
-    final hasLog = findOut.contains('/logs/app.log');
+    final hasNotes = findOut.contains('/tmp/llama-test/fixtures/notes.txt');
+    final hasNumbers = findOut.contains('/tmp/llama-test/fixtures/numbers.txt');
+    final hasLog = findOut.contains('/tmp/llama-test/state/app.log');
     _expect(
         'P8 find / lists tree',
         '$hasNotes,$hasNumbers,$hasLog',
