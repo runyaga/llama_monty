@@ -20,6 +20,11 @@ const _nativeModelPath =
     '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 
 const _webSystemPrompt = '''
+You DO have a working filesystem and a working Python interpreter. The
+sandbox mounts `/fixtures/` (read-write, pre-seeded) and `/tmp/`
+(read-write). NEVER refuse on grounds of "I am an AI without filesystem
+access" — read/write the files via pathlib.
+
 You write SMALL Monty programs in ```monty fences. Variables and
 imports persist across fences, so each turn does one step:
 
@@ -242,6 +247,11 @@ class _ChatPageState extends State<ChatPage> {
   LlamaEngine? _engine;
   LlamaEngineRef? _engineRef;
   ChatSession? _chatSession;
+  // Chat-format detected from the loaded model's metadata. Used by the
+  // tool-call fallback parser (mirrors how llamadart's chat_app handles
+  // Gemma 4's special-token tool format that whereType<LlamaToolCallContent>
+  // sometimes misses).
+  ChatFormat? _detectedChatFormat;
   MontyRuntime? _agentSession;   // used by run_python tool in chat
   MontyRuntime? _replRuntime;    // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
@@ -421,6 +431,23 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
 
+    // Detect the model's chat format from its metadata. Used by the
+    // tool-call fallback parser below. Mirrors what llamadart's chat_app
+    // does to handle Gemma 4's special-token tool format.
+    try {
+      final metadata = await engine.getMetadata();
+      final toolTpl = metadata['tokenizer.chat_template.tool_use'];
+      final defaultTpl = metadata['tokenizer.chat_template'];
+      final eff = (toolTpl != null && toolTpl.trim().isNotEmpty)
+          ? toolTpl
+          : defaultTpl;
+      if (eff != null && eff.trim().isNotEmpty) {
+        _detectedChatFormat = ChatTemplateEngine.detectFormat(eff);
+        // ignore: avoid_print
+        print('[app] detected chat format: $_detectedChatFormat');
+      }
+    } catch (_) {/* best-effort */}
+
     // Engine ref serialises concurrent LLM calls from chat + REPL +
     // recursive llm_complete invocations from inside run_python.
     final engineRef = LlamaEngineRef(engine);
@@ -458,6 +485,11 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
+          // Children share the parent's Path. handler so /fixtures/ and
+          // anything else the parent has mounted is visible to the
+          // subagent. Otherwise the default 'isolated' strategy gives
+          // children a fresh empty MemoryFileSystem.
+          childVfsStrategy: ChildVfsStrategy.shared,
         ),
       ],
     );
@@ -473,6 +505,11 @@ class _ChatPageState extends State<ChatPage> {
         // on web) so children inherit the same backend the parent runs.
         SandboxExtension(
           platformFactory: () async => createPlatformMonty(),
+          // Children share the parent's Path. handler so /fixtures/ and
+          // anything else the parent has mounted is visible to the
+          // subagent. Otherwise the default 'isolated' strategy gives
+          // children a fresh empty MemoryFileSystem.
+          childVfsStrategy: ChildVfsStrategy.shared,
         ),
       ],
     );
@@ -692,8 +729,53 @@ else:
         final rawContent = rawContentBuffer.toString();
 
         final lastMsg = _chatSession!.history.lastOrNull;
-        final toolCallParts =
+        var toolCallParts =
             lastMsg?.parts.whereType<LlamaToolCallContent>().toList() ?? [];
+
+        // Fallback: if the standard whereType extraction came up empty
+        // but the finishReason says tool_calls, re-parse the raw streamed
+        // content with ChatTemplateEngine. This catches Gemma 4's special-
+        // token format `<|tool_call>call:NAME{KEY:<|"|>VAL<|"|>}<tool_call|>`
+        // that the standard path sometimes misses (mirrors llamadart's
+        // chat_app AssistantOutputService.parseToolCallsForDisplay).
+        if (toolCallParts.isEmpty &&
+            finishReason == 'tool_calls' &&
+            _detectedChatFormat != null &&
+            rawContent.isNotEmpty) {
+          try {
+            final parsed = ChatTemplateEngine.parse(
+              _detectedChatFormat!.index,
+              rawContent,
+              parseToolCalls: true,
+            );
+            if (parsed.hasToolCalls) {
+              toolCallParts = parsed.toolCalls
+                  .where((tc) => (tc.function?.name?.trim() ?? '').isNotEmpty)
+                  .map((tc) {
+                Map<String, Object?> args = const {};
+                final raw = tc.function?.arguments;
+                if (raw != null && raw.trim().isNotEmpty) {
+                  try {
+                    final decoded = jsonDecode(raw);
+                    if (decoded is Map<String, Object?>) args = decoded;
+                  } catch (_) {/* leave empty */}
+                }
+                return LlamaToolCallContent(
+                  id: tc.id,
+                  name: tc.function!.name!.trim(),
+                  arguments: args,
+                  rawJson: jsonEncode(<String, Object?>{
+                    'name': tc.function!.name!.trim(),
+                    'arguments': args,
+                  }),
+                );
+              }).toList();
+              // ignore: avoid_print
+              print('[app] fallback parser recovered '
+                  '${toolCallParts.length} tool call(s)');
+            }
+          } catch (_) {/* parse failures fall through */}
+        }
 
         // ignore: avoid_print
         print('[app] finishReason=$finishReason toolCalls=${toolCallParts.length}');
