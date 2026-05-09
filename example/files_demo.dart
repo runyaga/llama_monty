@@ -163,6 +163,24 @@ Future<void> _runTask(
       continue;
     }
     final out = (result.printOutput ?? '').trim();
+    // Catch caught-but-printed errors: when the LLM's own try/except
+    // swallows an exception and prints "Error: …" / "An ... occurred"
+    // to stdout. Without this the host sees a "successful" run that
+    // produced a misleading message instead of the real answer.
+    final caught = RegExp(
+      r"^(error[: ]|an .{0,40}(error|exception)|exception[: ]|traceback |"
+      r"warning: |skipping line|invalid|.{0,80}has no attribute)",
+      caseSensitive: false,
+      multiLine: true,
+    ).firstMatch(out);
+    if (caught != null) {
+      lastErr =
+          'your except-clause printed: ${out.substring(caught.start, (caught.start + 200).clamp(0, out.length))}';
+      stdout.writeln('\n  ✗ Caught-but-printed error in stdout: $lastErr');
+      stdout.writeln(
+          '  → asking LLM to retry without swallowing the exception');
+      continue;
+    }
     final ret = result.value is MontyNone
         ? ''
         : '${result.value.dartValue ?? ''}'.trim();
