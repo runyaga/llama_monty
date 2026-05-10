@@ -1,31 +1,33 @@
-# [RETRACTED] Finding — `find -type f` and `-type d` silently ignored
+# [SHIPPED in N6] Finding — `find -type f` and `-type d` silently ignored
 
-> **2026-05-09 retraction**: This finding is **incorrect**. Re-probing
-> against current main (post-M1 commit `d7dc0ee`) shows `-type f` and
-> `-type d` ARE honored:
-> ```
-> $ find /tmp           → 6 paths (3 files + 3 inferred dirs)
-> $ find /tmp -type f   → 3 file paths     ✓
-> $ find /tmp -type d   → 3 dir paths      ✓
-> ```
-> The original probe in this memo must have hit a stale dylib (or
-> a different VFS shape) where directory inference wasn't surfacing.
-> Apologies for the noise.
+> **2026-05-09 status**: original finding was **correct**. Upstream
+> shipped fix in **Phase N6 (commit `d0a0ff3`)**.
 >
-> **What's still true**: `-exec` IS silently dropped. Probe:
-> ```
-> $ find /tmp -type f -exec wc -l {} +   → just paths, no wc output
-> $ find /tmp -type f -exec wc -l {} \;  → just paths, no wc output
-> ```
-> The `-exec` action is parsed but the action never fires; results
-> identical to bare `find -type f`. Model that writes the canonical
-> `find ... -exec wc {} +` form gets a path list, not line counts.
+> See `PHASE_N6_NOTE_FROM_DART_WASM_SANDBOX.md` for the upstream's
+> ship doc.
 >
-> Severity downgraded: `-exec` has a clean workaround (`find ... |
-> xargs wc`) and the model often pivots there. Below ship-threshold;
+> **History note**: I posted a retraction earlier in the day after
+> a re-probe seemed to show `-type f`/`-type d` working. That
+> retraction was wrong — my re-probe must have hit a stale or
+> different transcript than the one that produced the original
+> finding. Upstream confirmed the original via source inspection
+> across `0cdb5c5..1b5e4d2..8e444a8` and shipped anyway. Apologies
+> for the back-and-forth on our side; the underlying signal was real.
+>
+> **Post-N6 contract change**: `find /dir` (no `-type`) now lists
+> files **AND** inferred directories. Was files-only by accident
+> (path inference wasn't tracking dirs). Existing call sites that
+> depended on "files only" need explicit `-type f`. Audit pending
+> on our specs; B07/M01/D01 most likely affected at the prompt
+> level (model behavior may shift; verify shapes survive substring
+> matching).
+>
+> **What's still true**: `-exec` IS silently dropped per upstream's
+> N6 note (intentionally — workaround `find ... | xargs cmd` is
+> clean and observed in model usage). Below ship-threshold;
 > watch-list only.
 >
-> Original (incorrect) finding follows for archive purposes.
+> Original finding follows for archive purposes.
 >
 > ---
 

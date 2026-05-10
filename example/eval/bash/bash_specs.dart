@@ -937,4 +937,31 @@ final List<BashSpec> bashSpecs = <BashSpec>[
     ),
     // Skipping canonical — would return -4 (DoS guard at MAX_FILE_BYTES).
   ),
+
+  // Tier 16 — canary specs for upstream-shipped fixes. Each one is a
+  // happy-path test that should pass cleanly post-ship and would
+  // regress immediately if the fix is reverted.
+  //
+  // Z14: validates Phase N6 (commit d0a0ff3) — `find -type d` returns
+  // directories, distinct from `find -type f`. Pre-N6, both returned
+  // the same set (substring match over all paths). Post-N6, dir
+  // inference walks path prefixes; the lists are disjoint.
+  BashSpec(
+    id: 'Z14_find_type_distinct',
+    prompt:
+        'Use run_bash to run BOTH `find /tmp/llama-test -type f | wc -l` '
+        'AND `find /tmp/llama-test -type d | wc -l` in separate calls. '
+        'Tell me both counts AND confirm whether they are different.',
+    verify: _v(
+      fenceContains: 'run_bash',
+      // 8 files in bashVfs under /tmp/llama-test, 4 inferred dirs
+      // (/tmp/llama-test, /tmp/llama-test/fixtures, /tmp/llama-test/state,
+      // /tmp/llama-test/configs). Counts MUST differ.
+      proseContainsAll: ['8', '4'],
+      proseContainsAny: ['different', 'differ', 'distinct', 'not equal'],
+    ),
+    minTurns: 2,
+    maxTurns: 5,
+    canonicalSolution: 'find /tmp/llama-test -type f | wc -l',
+  ),
 ];
