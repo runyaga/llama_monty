@@ -92,18 +92,30 @@ DIRECTLY — do not wrap it in `run_python`:
 The harness runs it and hands you the captured stdout. Use that
 stdout as the answer.
 
-Allow-listed commands ONLY: `pwd / cd / ls / cat / find / echo`.
-`&&` chaining and relative paths work. The cwd PERSISTS across
-`run_bash` calls. Reset with `/sh-reset` or `cd /`.
+Allow-listed: `pwd / cd / ls / cat / find / echo / wc / grep /
+head / tail / sort / xargs`. `&&` chaining, `|` pipes, `*` and
+`?` glob expansion, `find -type f|d`, `grep -i|-v|-c|-n` (FIXED-
+STRING — `[`, `]`, `^`, `\$`, `.` are LITERAL chars; do NOT
+escape them as regex), and quoted paths all work. The cwd
+PERSISTS across `run_bash` calls. Reset with `/sh-reset` or
+`cd /`.
 
 The wasm sandbox has its own VFS, snapshotted from
 `/tmp/llama-test/` when the agent started. It does NOT see live
 edits the Python side makes — for fresh data, use Python pathlib.
 
-Anything outside the allow-list (`sed`, `awk`, `grep`, pipes `|`,
-`\$VAR`, `head`, `tail`, `wc`) is rejected with `<host error -3>`.
-For those tasks, fall back to Python (`run_python` fence) — read
-the file via pathlib and parse in Python.
+Outside the allow-list (`sed`, `awk`, `diff`, `[abc]` bracket
+globs, `**` recursive globs, `;` / `||` separators) is rejected
+with `<host error -3>`. For those, fall back to Python.
+
+# IMPORTANT: multi-call tool requests
+
+When the user asks for MULTIPLE separate `run_bash` calls (e.g.
+"call run_bash twice", "first do X then in a SEPARATE call do
+Y"), you MUST emit each call as its OWN tool invocation, even
+after seeing intermediate output. After the harness shows you
+the result of call 1, ALWAYS issue call 2 — do not skip it
+because the prose feels complete.
 
 When to pick which:
   - Pure file/dir inspection → `run_bash` directly
@@ -1187,6 +1199,11 @@ else:
             final value = m.group(2)?.trim() ?? '';
             if (name.isEmpty || value.isEmpty) continue;
             final argKey = name == 'run_bash' ? 'cmd' : 'code';
+            // ignore: avoid_print
+            print(
+              '[app] regex fallback parsed name=$name argKey=$argKey '
+              'len=${value.length} preview=${value.substring(0, value.length > 120 ? 120 : value.length)}',
+            );
             toolCallParts.add(LlamaToolCallContent(
               id: 'wasm-fallback-${toolCallParts.length}',
               name: name,
@@ -1198,6 +1215,13 @@ else:
             // ignore: avoid_print
             print(
               '[app] regex fallback recovered ${toolCallParts.length} tool call(s)',
+            );
+          } else {
+            // ignore: avoid_print
+            print(
+              '[app] regex fallback FOUND <|tool_call> but EXTRACTED 0; '
+              'rawContent.len=${rawContent.length} '
+              'preview=${rawContent.substring(0, rawContent.length > 400 ? 400 : rawContent.length)}',
             );
           }
         }
@@ -2294,6 +2318,10 @@ else:
       final wasmBytes = await loadGuestWasmBytes();
       final snapshot = await _snapshotLlamaTestForWasmVfs(os);
       await wasmHost.loadTree(snapshot);
+      // ignore: avoid_print
+      print(
+        '[app] wasm VFS snapshot: ${snapshot.length} files. paths=${snapshot.keys.take(20).join(", ")}',
+      );
       // M1.5 cached compile — first exec pays the ~200 ms cost; pre-
       // warming here so the user's first run_bash is sub-millisecond.
       final guest = wasmHost.loadGuest(wasmBytes);
