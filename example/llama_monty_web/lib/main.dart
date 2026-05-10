@@ -1103,13 +1103,24 @@ else:
             lastMsg?.parts.whereType<LlamaToolCallContent>().toList() ?? [];
 
         // Fallback: if the standard whereType extraction came up empty
-        // but the finishReason says tool_calls, re-parse the raw streamed
-        // content with ChatTemplateEngine. This catches Gemma 4's special-
-        // token format `<|tool_call>call:NAME{KEY:<|"|>VAL<|"|>}<tool_call|>`
-        // that the standard path sometimes misses (mirrors llamadart's
-        // chat_app AssistantOutputService.parseToolCallsForDisplay).
+        // but the raw content looks like Gemma 4's tool-call special-
+        // token format `<|tool_call>call:NAME{KEY:<|"|>VAL<|"|>}<tool_call|>`,
+        // re-parse with ChatTemplateEngine. Mirrors llamadart's chat_app
+        // AssistantOutputService.parseToolCallsForDisplay.
+        //
+        // Two cases trigger this fallback:
+        // 1. FFI: `finishReason == 'tool_calls'` but llamadart didn't
+        //    populate the toolCalls list directly — happens occasionally.
+        // 2. WASM: `finishReason == 'stop'` because llamadart-web's
+        //    grammar-dropped sampler doesn't detect tool-call special
+        //    tokens; the model still emits the right text, llamadart
+        //    just doesn't recognize it. Reproduced in the live UI on
+        //    chrome 2026-05-10; before this fix every tool-call query
+        //    silently failed with "fence.match=none" + empty bubble.
+        final looksLikeToolCall = rawContent.contains('<|tool_call>');
         if (toolCallParts.isEmpty &&
-            finishReason == 'tool_calls' &&
+            (finishReason == 'tool_calls' ||
+                (finishReason == 'stop' && looksLikeToolCall)) &&
             _detectedChatFormat != null &&
             rawContent.isNotEmpty) {
           try {
@@ -1149,8 +1160,45 @@ else:
                 '${toolCallParts.length} tool call(s)',
               );
             }
-          } catch (_) {
-            /* parse failures fall through */
+          } catch (e) {
+            // ignore: avoid_print
+            print('[app] ChatTemplateEngine parse threw: $e');
+          }
+        }
+
+        // Last-ditch regex fallback for WASM. ChatTemplateEngine handles
+        // the FFI JSON-arg form and the WASM `<|"|>`-quoted form, but the
+        // grammar-dropped sampler can also emit a looser format like
+        // `<|tool_call>call:run_bash\ncmd:echo 'hello'` (no braces, no
+        // closing `<tool_call|>`). Pick out (toolName, cmd) directly so
+        // the dispatcher has *something* to route. Reproduced live in
+        // chrome 2026-05-10.
+        if (toolCallParts.isEmpty && rawContent.contains('<|tool_call>')) {
+          final regex = RegExp(
+            r'<\|tool_call>\s*call:\s*(\w+)'
+            r'[\s\S]*?(?:cmd|code)\s*[:=]\s*'
+            r'(?:<\|"\|>|"|\{?")?'
+            r'([\s\S]*?)'
+            r'(?:<\|"\|>|"\}|\}|\n*<tool_call\|>|$)',
+            multiLine: true,
+          );
+          for (final m in regex.allMatches(rawContent)) {
+            final name = m.group(1)?.trim() ?? '';
+            final value = m.group(2)?.trim() ?? '';
+            if (name.isEmpty || value.isEmpty) continue;
+            final argKey = name == 'run_bash' ? 'cmd' : 'code';
+            toolCallParts.add(LlamaToolCallContent(
+              id: 'wasm-fallback-${toolCallParts.length}',
+              name: name,
+              arguments: {argKey: value},
+              rawJson: jsonEncode({argKey: value}),
+            ));
+          }
+          if (toolCallParts.isNotEmpty) {
+            // ignore: avoid_print
+            print(
+              '[app] regex fallback recovered ${toolCallParts.length} tool call(s)',
+            );
           }
         }
 
@@ -1159,7 +1207,12 @@ else:
           '[app] finishReason=$finishReason toolCalls=${toolCallParts.length}',
         );
 
-        if (finishReason == 'tool_calls' && toolCallParts.isNotEmpty) {
+        // Dispatcher: if we have parts at all (from primary, fallback,
+        // or regex paths), route them. The old gate required
+        // `finishReason == 'tool_calls'` which excluded WASM where
+        // llamadart-web reports `'stop'` on the same special-token
+        // sequences.
+        if (toolCallParts.isNotEmpty) {
           if (toolRetries >= maxToolRetries) {
             _appendChatLog(
               'sys',
@@ -1585,7 +1638,7 @@ else:
     }
     // ignore: avoid_print
     print(
-      '[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 80 ? 80 : cleaned.length)}',
+      '[app] fence.match=none firstChars=${cleaned.substring(0, cleaned.length > 400 ? 400 : cleaned.length)}',
     );
     return null;
   }
