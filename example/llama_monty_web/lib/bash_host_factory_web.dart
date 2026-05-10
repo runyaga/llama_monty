@@ -16,9 +16,9 @@ import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 const _wasmAssetKey = 'assets/wasm_guest.wasm';
 
-Future<WasmHostBackend?> openOrNull() async {
+Future<WasmHost?> openOrNull() async {
   try {
-    return await openWasmHost();
+    return await WasmHost.open();
   } on Object {
     return null;
   }

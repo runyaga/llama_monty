@@ -6,16 +6,13 @@
 //
 // Run: dart run example/eval/bash/run_bash_bench.dart
 
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
-import 'package:dart_monty_core/dart_monty_core.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
-import 'package:dart_wasm_sandbox/src/wasm_host_ffi.dart';
 import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
+import 'package:dart_wasm_sandbox/ffi.dart' show openFfi;
 
 import 'bash_specs.dart';
 
@@ -91,8 +88,8 @@ final _fenceRe =
 
 Future<BashResult> _runOne({
   required LlamaEngine engine,
-  required WasmHostBackend wasmHost,
-  required Uint8List wasmBytes,
+  required WasmHost wasmHost,
+  required LoadedGuest guest,
   required BashSpec tc,
 }) async {
   // Reset shell + VFS so specs are independent.
@@ -103,9 +100,7 @@ Future<BashResult> _runOne({
   // namespace; without this, variables defined in one spec/replicate
   // leak into the next. Cheap to construct.
   final monty = MontyRuntime(os: defaultOsHandler());
-  monty.register(
-    buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-  );
+  monty.register(buildRunBashFunction(guest: guest));
 
   final session = ChatSession(engine, systemPrompt: _systemPrompt);
   final t = StringBuffer();
@@ -246,8 +241,12 @@ Future<void> main(List<String> args) async {
     modelParams: ModelParams(contextSize: 8192),
   );
 
-  final wasmHost = WasmHostFfi.open(_dylibPath);
+  final wasmHost = await openFfi(libraryPath: _dylibPath);
   final wasmBytes = File(_wasmPath).readAsBytesSync();
+  // Cache the compiled wasm module once (M1.5). First exec pays the
+  // ~200 ms compile cost; subsequent calls are sub-millisecond.
+  final guest = wasmHost.loadGuest(wasmBytes);
+  await guest.warmup();
 
   // ---------------------------------------------------------------
   // V-tier setup — write the mount fixture tree to a per-suite
@@ -276,16 +275,14 @@ Future<void> main(List<String> args) async {
     if (tc.canonicalSolution == null) continue;
     await wasmHost.resetSession();
     await wasmHost.loadTree(bashVfs);
-    final out = await wasmHost.run(
-      wasmBytes,
-      stdin: Uint8List.fromList(utf8.encode(tc.canonicalSolution!)),
-    );
-    final raw = utf8.decode(out, allowMalformed: true);
-    final marker = RegExp(r'<host error -?\d+>').firstMatch(raw);
+    final result = await guest.exec(tc.canonicalSolution!);
+    final raw = result.stdout();
     final firstLine =
         raw.split('\n').firstWhere((l) => l.isNotEmpty, orElse: () => '');
-    if (marker != null) {
-      stdout.writeln('✗ ${tc.id.padRight(38)} ${marker.group(0)}');
+    if (result.error != null) {
+      stdout.writeln(
+        '✗ ${tc.id.padRight(38)} ${result.error!.name} (exit ${result.exitCode})',
+      );
       canonicalFails++;
     } else {
       // Apply the spec's verify treating canonical stdout as the
@@ -359,7 +356,7 @@ Future<void> main(List<String> args) async {
       final result = await _runOne(
         engine: engine,
         wasmHost: wasmHost,
-        wasmBytes: wasmBytes,
+        guest: guest,
         tc: tc,
       );
       stdout.writeln(result.transcript);

@@ -24,7 +24,8 @@ import 'dart:typed_data';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
-import 'package:dart_wasm_sandbox/src/wasm_host_ffi.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
+import 'package:dart_wasm_sandbox/ffi.dart' show openFfi;
 
 const _modelPath = '/Users/runyaga/models/gemma-4-E2B-it-Q4_K_M.gguf';
 const _spikeRoot = '/Users/runyaga/dev/dart_wasm_sandbox';
@@ -226,12 +227,12 @@ Future<void> main() async {
     modelParams: ModelParams(contextSize: 8192),
   );
 
-  final wasmHost = WasmHostFfi.open(_dylibPath);
+  final wasmHost = await openFfi(libraryPath: _dylibPath);
   final monty = MontyRuntime(os: defaultOsHandler());
   final wasmBytes = File(_wasmPath).readAsBytesSync();
-  monty.register(
-    buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-  );
+  final guest = wasmHost.loadGuest(wasmBytes);
+  await guest.warmup();
+  monty.register(buildRunBashFunction(guest: guest));
 
   final commandStats = <String, _Outcome>{};
 

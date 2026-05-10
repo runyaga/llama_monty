@@ -30,7 +30,8 @@ import 'dart:io';
 import 'package:dart_monty/dart_monty_bridge.dart';
 import 'package:llama_monty/llama_monty.dart';
 import 'package:llamadart/llamadart.dart';
-import 'package:dart_wasm_sandbox/src/wasm_host_ffi.dart';
+import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
+import 'package:dart_wasm_sandbox/ffi.dart' show openFfi;
 import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 import 'bash_specs.dart';
@@ -154,7 +155,7 @@ final _fenceRe = RegExp(r'```(?:monty|python|py)\s*\n?([\s\S]*?)```');
 Future<_Trial> _runOne({
   required LlamaEngine engine,
   required MontyRuntime monty,
-  required WasmHostBackend wasmHost,
+  required WasmHost wasmHost,
   required BashSpec spec,
   required String variant,
   required String systemPrompt,
@@ -345,12 +346,12 @@ Future<void> main(List<String> argv) async {
     modelParams: ModelParams(contextSize: 8192),
   );
 
-  final wasmHost = WasmHostFfi.open(_dylibPath);
+  final wasmHost = await openFfi(libraryPath: _dylibPath);
   final monty = MontyRuntime(os: defaultOsHandler());
   final wasmBytes = File(_wasmPath).readAsBytesSync();
-  monty.register(
-    buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-  );
+  final guest = wasmHost.loadGuest(wasmBytes);
+  await guest.warmup();
+  monty.register(buildRunBashFunction(guest: guest));
 
   final trials = <_Trial>[];
   // Per-spec-per-variant aggregate.

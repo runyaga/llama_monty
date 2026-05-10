@@ -343,10 +343,11 @@ class _ChatPageState extends State<ChatPage> {
   MontyRuntime? _replRuntime; // used by Python REPL; has LlamaMontyPlugin
   ToolDefinition? _runPythonTool;
   ToolDefinition? _runBashTool;
+  LoadedGuest? _wasmGuest;
 
   // dart_wasm_sandbox's WASM host for run_bash. Opened on app launch,
   // disposed on tear-down. Persists cwd + VFS across all calls.
-  WasmHostBackend? _wasmBashHost;
+  WasmHost? _wasmBashHost;
 
   double? _loadProgress;
   String _status = 'idle';
@@ -894,19 +895,15 @@ class _ChatPageState extends State<ChatPage> {
       handler: (params) async {
         final cmd = params.getRequiredString('cmd');
         _appendChatLog('tool', 'run_bash: $cmd');
-        final host = _wasmBashHost;
-        if (host == null) {
+        final guest = _wasmGuest;
+        if (guest == null) {
           final msg = 'Error: run_bash not registered (host artefacts missing)';
           _appendChatLog('error', msg);
           return msg;
         }
         try {
-          final wasmBytes = await loadGuestWasmBytes();
-          final outBytes = await host.run(
-            wasmBytes,
-            stdin: Uint8List.fromList(utf8.encode(cmd)),
-          );
-          final raw = utf8.decode(outBytes, allowMalformed: true);
+          final result = await guest.exec(cmd);
+          final raw = result.stdout();
           _appendChatLog('output', raw.trim());
           return raw;
         } on Object catch (e) {
@@ -2244,10 +2241,13 @@ else:
       final wasmBytes = await loadGuestWasmBytes();
       final snapshot = await _snapshotLlamaTestForWasmVfs(os);
       await wasmHost.loadTree(snapshot);
-      agent.register(
-        buildRunBashFunction(host: wasmHost, wasmBytes: wasmBytes),
-      );
+      // M1.5 cached compile — first exec pays the ~200 ms cost; pre-
+      // warming here so the user's first run_bash is sub-millisecond.
+      final guest = wasmHost.loadGuest(wasmBytes);
+      await guest.warmup();
+      agent.register(buildRunBashFunction(guest: guest));
       _wasmBashHost = wasmHost;
+      _wasmGuest = guest;
       _appendChatLog(
         'sys',
         'run_bash registered (${snapshot.length} files in wasm VFS).',

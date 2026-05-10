@@ -22,9 +22,9 @@ import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 
 import 'bash_host_factory_io.dart' if (dart.library.js_interop) 'bash_host_factory_web.dart' as platform;
 
-/// Opens the WasmHostBackend if the platform's artefacts are
+/// Opens the WasmHost façade if the platform's artefacts are
 /// available; returns null otherwise.
-Future<WasmHostBackend?> openBashHostOrNull() => platform.openOrNull();
+Future<WasmHost?> openBashHostOrNull() => platform.openOrNull();
 
 /// Loads `wasm_guest.wasm` bytes for the platform.
 Future<Uint8List> loadGuestWasmBytes() => platform.loadGuestWasmBytes();
