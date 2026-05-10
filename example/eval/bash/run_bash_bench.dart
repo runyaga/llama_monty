@@ -42,15 +42,13 @@ If `exit_code != 0`, the command failed — `stderr` says why. Don't
 silently print empty `stdout` and pretend it worked.
 
 IMPORTANT shell semantics:
-- **No glob expansion.** `*` is NOT expanded. Don't write
-  `ls /dir/*.log` — it returns empty. To list files in a directory,
-  use `find /dir` (or `find /dir -type f` for files only).
 - **`grep` is fixed-string substring match, NOT regex.** `[`, `]`,
   `^`, `\$`, `\\`, `.` are matched as literal characters. Don't
   escape brackets — write `grep ERROR file`, not `grep "\[ERROR\]"
   file`.
 - For "find X files matching pattern then run cmd on each," use
-  `find /dir | xargs cmd` or `cmd file1 file2 ...` directly.
+  `find /dir | xargs cmd`, `cmd /dir/*.ext` (glob expansion works),
+  or `cmd file1 file2 ...` directly.
 
 ```monty
 out = run_bash('echo hello')
