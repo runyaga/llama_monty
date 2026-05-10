@@ -18,42 +18,12 @@
 @Tags(['wasm'])
 library;
 
-import 'dart:js_interop';
 import 'dart:typed_data';
 
 import 'package:dart_wasm_sandbox/dart_wasm_sandbox.dart';
 import 'package:test/test.dart';
-import 'package:web/web.dart' as web;
 
-/// Fetch the wasm guest bytes via XHR. The test runner serves the
-/// project's `web/` folder by default; we explicitly fetch the
-/// pre-bundled asset that the live app uses.
-Future<Uint8List> _loadGuestBytes() async {
-  // Path is whatever `dart test -p chrome` serves under. The
-  // assets/wasm_guest.wasm path mirrors what main.dart loads via
-  // rootBundle. Fall back to a sibling relative path if needed.
-  final candidates = [
-    'assets/wasm_guest.wasm',
-    'web/assets/wasm_guest.wasm',
-    '/assets/wasm_guest.wasm',
-  ];
-  Object? lastErr;
-  for (final url in candidates) {
-    try {
-      final resp = await web.window.fetch(url.toJS).toDart;
-      if (resp.ok) {
-        final buf = await resp.arrayBuffer().toDart;
-        return buf.toDart.asUint8List();
-      }
-    } on Object catch (e) {
-      lastErr = e;
-    }
-  }
-  throw StateError(
-    'Could not load wasm_guest.wasm from any candidate path. '
-    'Last error: $lastErr',
-  );
-}
+import 'support/wasm_guest_bytes.g.dart';
 
 void main() {
   group('WASM run_bash isolated integration', () {
@@ -62,8 +32,7 @@ void main() {
 
     setUpAll(() async {
       host = await WasmHost.open();
-      final bytes = await _loadGuestBytes();
-      guest = host.loadGuest(bytes);
+      guest = host.loadGuest(wasmGuestBytes);
       await guest.warmup();
     });
 
